@@ -88,9 +88,8 @@ const EMPTY = {
 
 const TOTAL_STEPS = 6;
 
-// ── Recharts ──────────────────────────────────────────────────────────────────
-const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-        PieChart, Pie, Cell, Legend } = Recharts;
+// ── Recharts (lazy — resolved at render time) ─────────────────────────────────
+const getRC = () => window.Recharts || {};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const YesNo = ({ value, onChange, labels = ['Sim', 'Não'] }) => (
@@ -585,6 +584,7 @@ const ReportModal = ({ r, onClose }) => {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 const Dashboard = ({ reports }) => {
+  const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = getRC();
   const [unitFilter, setUnitFilter] = React.useState('all');
 
   const filtered = unitFilter === 'all'
