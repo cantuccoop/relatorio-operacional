@@ -50,6 +50,13 @@ const UNITS = [
 
 const MOVIMENTOS = ['Fraco', 'Médio', 'Forte', 'Fortíssimo'];
 const TURNOS     = ['Manhã', 'Noite'];
+const RESPONSAVEIS = {
+  'asa-sul':      ['Danillo', 'Ricardo'],
+  'asa-norte':    ['João', 'Endson', 'Leonardo'],
+  'aguas-claras': ['Jefferson', 'Luiza'],
+  'superquadra':  ['Mateus', 'Vando', 'Thallison'],
+  'koji':         [],
+};
 
 const getToday = () => {
   const now = new Date();
@@ -161,7 +168,7 @@ const ProgressBar = ({ step }) => (
 );
 
 // ── Step components ───────────────────────────────────────────────────────────
-const Step1 = ({ f, set, unitLabel }) => (
+const Step1 = ({ f, set, unitLabel, unitId }) => (
   <div data-animate>
     <StepHeader step={1} title="Identificação" subtitle="Dados do turno" />
     <Field label="Unidade">
@@ -174,7 +181,11 @@ const Step1 = ({ f, set, unitLabel }) => (
       <Select value={f.shift} onChange={v => set('shift', v)} options={TURNOS} placeholder="Selecione o turno" />
     </Field>
     <Field label="Responsável" required>
-      <Input value={f.responsible} onChange={e => set('responsible', e.target.value)} placeholder="Nome do responsável" />
+      {RESPONSAVEIS[unitId] && RESPONSAVEIS[unitId].length > 0
+        ? <Select value={f.responsible} onChange={v => set('responsible', v)}
+            options={RESPONSAVEIS[unitId]} placeholder="Selecione o responsável" />
+        : <Input value={f.responsible} onChange={e => set('responsible', e.target.value)} placeholder="Nome do responsável" />
+      }
     </Field>
     <Field label="Movimento do turno" required>
       <div className="grid grid-cols-2 gap-2">
@@ -868,7 +879,7 @@ function App() {
       {activeTab === 'form' && (
         <div className="px-4 pt-4 pb-32">
           <ProgressBar step={step} />
-          {step === 1 && <Step1 f={formData} set={set} unitLabel={selectedUnit.label} />}
+          {step === 1 && <Step1 f={formData} set={set} unitLabel={selectedUnit.label} unitId={selectedUnit.id} />}
           {step === 2 && <Step2 f={formData} set={set} />}
           {step === 3 && <Step3 f={formData} set={set} />}
           {step === 4 && <Step4 f={formData} set={set} />}
