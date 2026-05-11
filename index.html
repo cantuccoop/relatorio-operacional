@@ -1857,12 +1857,19 @@ const Dashboard = ({
   const [unitFilter, setUnitFilter] = React.useState('all');
   const [periodFilter, setPeriodFilter] = React.useState('all');
   const [selectedReport, setSelectedReport] = React.useState(null);
-  const [confirmDelete, setConfirmDelete] = React.useState(null); // report to delete
-
-  const deleteReport = async r => {
-    const col = r._col === 'mane' ? COL_MANE : COL_UNIDADES;
-    await db.collection(col).doc(r.id).delete();
+  const [confirmDelete, setConfirmDelete] = React.useState(null);
+  const [deletePass, setDeletePass] = React.useState('');
+  const [deleteErr, setDeleteErr] = React.useState(false);
+  const deleteReport = async () => {
+    if (deletePass !== 'grupo3v') {
+      setDeleteErr(true);
+      setTimeout(() => setDeleteErr(false), 2000);
+      return;
+    }
+    const col = confirmDelete._col === 'mane' ? COL_MANE : COL_UNIDADES;
+    await db.collection(col).doc(confirmDelete.id).delete();
     setConfirmDelete(null);
+    setDeletePass('');
   };
   const allReports = React.useMemo(() => [...stdReports.map(r => ({
     ...r,
@@ -1927,21 +1934,42 @@ const Dashboard = ({
     onClose: () => setSelectedReport(null)
   }), confirmDelete && /*#__PURE__*/React.createElement("div", {
     className: "fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-6",
-    onClick: () => setConfirmDelete(null)
+    onClick: () => {
+      setConfirmDelete(null);
+      setDeletePass('');
+      setDeleteErr(false);
+    }
   }, /*#__PURE__*/React.createElement("div", {
     className: "bg-white rounded-2xl p-6 w-full max-w-sm",
     onClick: e => e.stopPropagation()
   }, /*#__PURE__*/React.createElement("h3", {
-    className: "font-bold text-slate-800 mb-2"
+    className: "font-bold text-slate-800 mb-1"
   }, "Excluir relat\xF3rio?"), /*#__PURE__*/React.createElement("p", {
-    className: "text-sm text-slate-500 mb-5"
-  }, UNITS.find(u => u.id === confirmDelete.unit)?.label || confirmDelete.unit, " \xB7 ", confirmDelete.date || confirmDelete.reportDate || '', " \xB7 ", confirmDelete.shift || '', /*#__PURE__*/React.createElement("br", null), "Esta a\xE7\xE3o n\xE3o pode ser desfeita."), /*#__PURE__*/React.createElement("div", {
+    className: "text-sm text-slate-500 mb-4"
+  }, UNITS.find(u => u.id === confirmDelete.unit)?.label || confirmDelete.unit, " \xB7 ", confirmDelete.date || confirmDelete.reportDate || '', " \xB7 ", confirmDelete.shift || '', /*#__PURE__*/React.createElement("br", null), "Esta a\xE7\xE3o n\xE3o pode ser desfeita."), /*#__PURE__*/React.createElement("label", {
+    className: "block text-xs font-medium text-slate-600 mb-1"
+  }, "Senha para excluir"), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    value: deletePass,
+    onChange: e => setDeletePass(e.target.value),
+    onKeyDown: e => e.key === 'Enter' && deleteReport(),
+    placeholder: "Digite a senha",
+    className: `w-full border rounded-xl px-3 py-2.5 text-sm mb-1 focus:outline-none focus:ring-2 ${deleteErr ? 'border-red-400 ring-red-200' : 'border-slate-200 focus:ring-orange-300'}`
+  }), deleteErr && /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-red-500 mb-3"
+  }, "Senha incorreta."), !deleteErr && /*#__PURE__*/React.createElement("div", {
+    className: "mb-3"
+  }), /*#__PURE__*/React.createElement("div", {
     className: "flex gap-3"
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setConfirmDelete(null),
+    onClick: () => {
+      setConfirmDelete(null);
+      setDeletePass('');
+      setDeleteErr(false);
+    },
     className: "flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm"
   }, "Cancelar"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => deleteReport(confirmDelete),
+    onClick: deleteReport,
     className: "flex-1 py-2.5 rounded-xl bg-red-500 text-white font-semibold text-sm"
   }, "Excluir")))), /*#__PURE__*/React.createElement("h2", {
     className: "text-lg font-bold text-slate-800 mb-4"
