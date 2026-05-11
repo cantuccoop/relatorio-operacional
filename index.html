@@ -73,7 +73,8 @@ const fmtDate = (d) => {
 const EMPTY = {
   date: getToday(), unit: '', shift: '', responsible: '', movimento: '',
   // Bloco 2
-  tma: '', pctAcima20: '', temAtraso: null, temReclamacaoDemora: null,
+  tma: '', pctAcima20: '', temAtraso: null, atrasoDesc: '', atrasoFeito: '',
+  temReclamacaoDemora: null, demoraDesc: '', demoraFeito: '',
   temErroQualidade: null, erroQualidadeDesc: '', erroMesa: '', erroFeito: '', erroCompensacao: null,
   // Bloco 3
   temReclamacaoAtendimento: null, reclamacaoAtendimentoDesc: '', solucaoAtendimento: '',
@@ -215,9 +216,30 @@ const Step2 = ({ f, set }) => (
     <Field label="Houve atraso relevante?" required>
       <YesNo value={f.temAtraso} onChange={v => set('temAtraso', v)} />
     </Field>
+    <ConditionalBox show={f.temAtraso === true}>
+      <Field label="Descreva o atraso">
+        <Textarea value={f.atrasoDesc} onChange={e => set('atrasoDesc', e.target.value)}
+          placeholder="O que causou o atraso?" rows={2} />
+      </Field>
+      <Field label="O que foi feito?">
+        <Textarea value={f.atrasoFeito} onChange={e => set('atrasoFeito', e.target.value)}
+          placeholder="Ação tomada" rows={2} />
+      </Field>
+    </ConditionalBox>
+
     <Field label="Houve reclamação de demora?" required>
       <YesNo value={f.temReclamacaoDemora} onChange={v => set('temReclamacaoDemora', v)} />
     </Field>
+    <ConditionalBox show={f.temReclamacaoDemora === true}>
+      <Field label="Descreva a reclamação">
+        <Textarea value={f.demoraDesc} onChange={e => set('demoraDesc', e.target.value)}
+          placeholder="Qual foi a reclamação?" rows={2} />
+      </Field>
+      <Field label="O que foi feito?">
+        <Textarea value={f.demoraFeito} onChange={e => set('demoraFeito', e.target.value)}
+          placeholder="Ação tomada" rows={2} />
+      </Field>
+    </ConditionalBox>
     <Field label="Houve erro de qualidade?" sub="(cru, queimado, montagem, etc)" required>
       <YesNo value={f.temErroQualidade} onChange={v => set('temErroQualidade', v)} />
     </Field>
