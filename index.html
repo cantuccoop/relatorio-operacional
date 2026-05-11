@@ -1639,10 +1639,27 @@ const ReportModal = ({
   const isStd = r._col === 'std';
   const text = isStd ? stdWAText(r) : r._waText || '';
   const copy = () => {
-    navigator.clipboard.writeText(text).then(() => {
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
-    });
+    };
+    if (navigator.clipboard && text) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      }).catch(fallback);
+    } else {
+      fallback();
+    }
   };
   const unit = UNITS.find(u => u.id === r.unit);
   const nota = r.notaTurno !== undefined && r.notaTurno !== '' ? Number(r.notaTurno) : null;
