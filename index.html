@@ -1534,6 +1534,109 @@ const ManeForm = ({
 // ══════════════════════════════════════════════════════════════════════════════
 // DASHBOARD (unificado)
 // ══════════════════════════════════════════════════════════════════════════════
+// ── WhatsApp summary for standard units ──────────────────────────────────────
+const stdWAText = r => {
+  const yn = v => v === true ? 'Sim' : v === false ? 'Não' : '—';
+  const unit = UNITS.find(u => u.id === r.unit)?.label || r.unit || '';
+  const lines = [];
+  lines.push(`*RELATÓRIO PÓS-TURNO — ${unit.toUpperCase()}*`);
+  lines.push(`📅 ${r.date || ''} | ${r.shift || ''} | ${r.responsible || ''}`);
+  lines.push(`Movimento: ${r.movimento || '—'}`);
+  lines.push('');
+  lines.push('*⏱ TMA e Cozinha*');
+  lines.push(`TMA: ${r.tma || '—'} min | % acima 20min: ${r.pctAcima20 || '—'}%`);
+  if (Number(r.pctAcima20) > 20 || r.temAtraso) {
+    lines.push(`Atraso: ${r.atrasoDesc || '—'}`);
+    lines.push(`Ação: ${r.atrasoFeito || '—'}`);
+  } else {
+    lines.push(`Atraso relevante: ${yn(r.temAtraso)}`);
+  }
+  lines.push(`Reclamação de demora: ${yn(r.temReclamacaoDemora)}`);
+  if (r.temReclamacaoDemora) {
+    lines.push(`  Desc: ${r.demoraDesc || '—'} | Ação: ${r.demoraFeito || '—'}`);
+  }
+  lines.push(`Erro de qualidade: ${yn(r.temErroQualidade)}`);
+  if (r.temErroQualidade) {
+    lines.push(`  Desc: ${r.erroQualidadeDesc || '—'} | Ação: ${r.erroFeito || '—'}`);
+    lines.push(`  Compensação: ${yn(r.erroCompensacao)}${r.erroCompensacaoDesc ? ' — ' + r.erroCompensacaoDesc : ''}`);
+  }
+  lines.push('');
+  lines.push('*🍽 Salão e Experiência*');
+  lines.push(`Visitas de mesa: ${r.visitaMesaQtd || '—'}`);
+  lines.push(`Reclamação atendimento: ${yn(r.temReclamacaoAtendimento)}`);
+  if (r.temReclamacaoAtendimento) {
+    lines.push(`  ${r.reclamacaoAtendimentoDesc || '—'} | Solução: ${r.solucaoAtendimento || '—'}`);
+  }
+  lines.push(`Reclamação ruptura: ${yn(r.temReclamacaoRuptura)}`);
+  if (r.temReclamacaoRuptura) {
+    lines.push(`  ${r.rupturaSalaoDesc || '—'} | Solução: ${r.solucaoRuptura || '—'}`);
+  }
+  lines.push(`Dificuldade explicação: ${yn(r.temDificuldadeExplicacao)}`);
+  if (r.temDificuldadeExplicacao) {
+    lines.push(`  ${r.dificuldadeDesc || '—'}`);
+  }
+  lines.push('');
+  lines.push('*🛵 Delivery / iFood*');
+  lines.push(`Atraso: ${yn(r.deliveryAtraso)} | Erro despacho: ${yn(r.deliveryErroDespacho)}`);
+  lines.push(`Rec. qualidade: ${yn(r.deliveryReclamacaoQualidade)} | Produto em falta: ${yn(r.deliveryProdutoFalta)} | Cortesia: ${yn(r.deliveryCortesia)}`);
+  if (r.deliveryAtraso && r.deliveryAtrasoDesc) {
+    lines.push(`  Atraso: ${r.deliveryAtrasoDesc}`);
+  }
+  if (r.deliveryCortesia && r.deliveryCortesiaDesc) {
+    lines.push(`  Cortesia: ${r.deliveryCortesiaDesc}`);
+  }
+  lines.push('');
+  lines.push('*⚙️ Operação*');
+  lines.push(`Checklists ok: ${yn(r.checklistsOk)}${r.checklistsDesc ? ' — ' + r.checklistsDesc : ''}`);
+  lines.push(`Falta/atraso colaborador: ${yn(r.faltaAtraso)}${r.faltaAtrasoDesc ? ' — ' + r.faltaAtrasoDesc : ''}`);
+  lines.push(`Problema sistema: ${yn(r.problemaSistema)}${r.sistemaDesc ? ' — ' + r.sistemaDesc : ''}`);
+  lines.push(`Equipamento quebrado: ${yn(r.equipamentoQuebrado)}`);
+  if (r.equipamentoQuebrado) {
+    lines.push(`  ${r.equipamentoDesc || '—'} | Ação: ${r.equipamentoAcao || '—'} | Prazo: ${r.equipamentoPrazo || '—'}`);
+  }
+  lines.push('');
+  lines.push('*📋 Gestão do Turno*');
+  lines.push(`Principal BO: ${r.principalBO || '—'}`);
+  lines.push(`Principal acerto: ${r.principalAcerto || '—'}`);
+  lines.push(`Atenção próximo turno: ${r.atencaoProximo || '—'}`);
+  lines.push(`Nota do turno: ${r.notaTurno || '—'}/10`);
+  return lines.join('\n');
+};
+
+// ── Report modal (WhatsApp preview) ──────────────────────────────────────────
+const ReportModal = ({
+  report,
+  onClose
+}) => {
+  const [copied, setCopied] = React.useState(false);
+  const isStd = report._col === 'std';
+  const text = isStd ? stdWAText(report) : report._waText || 'Relatório Mané — ver detalhes no dashboard';
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "fixed inset-0 bg-black/60 z-50 flex items-end justify-center",
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white w-full max-w-lg rounded-t-2xl p-5 max-h-[80vh] overflow-y-auto",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between mb-3"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-bold text-slate-800"
+  }, "Relat\xF3rio WhatsApp"), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "text-slate-400 text-xl"
+  }, "\u2715")), /*#__PURE__*/React.createElement("pre", {
+    className: "text-xs bg-slate-50 rounded-xl p-4 whitespace-pre-wrap font-mono text-slate-700 mb-4 border border-slate-200"
+  }, text), /*#__PURE__*/React.createElement("button", {
+    onClick: copy,
+    className: `w-full py-3 rounded-xl font-semibold text-sm transition-all ${copied ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`
+  }, copied ? '✓ Copiado!' : '📋 Copiar para WhatsApp')));
+};
 const Dashboard = ({
   stdReports,
   maneReports
@@ -1546,28 +1649,83 @@ const Dashboard = ({
     YAxis,
     CartesianGrid,
     Tooltip,
-    ResponsiveContainer
+    ResponsiveContainer,
+    LineChart,
+    Line
   } = RC;
   const [unitFilter, setUnitFilter] = React.useState('all');
-  const allReports = [...stdReports.map(r => ({
+  const [periodFilter, setPeriodFilter] = React.useState('all');
+  const [selectedReport, setSelectedReport] = React.useState(null);
+  const allReports = React.useMemo(() => [...stdReports.map(r => ({
     ...r,
     _col: 'std'
   })), ...maneReports.map(r => ({
     ...r,
     unit: 'mane',
     _col: 'mane'
-  }))];
-  const filtered = unitFilter === 'all' ? allReports : allReports.filter(r => r.unit === unitFilter || r.unit === unitFilter);
-  const avgNota = filtered.filter(r => r.notaTurno !== undefined).length ? (filtered.filter(r => r.notaTurno !== undefined).reduce((s, r) => s + Number(r.notaTurno || 0), 0) / filtered.filter(r => r.notaTurno !== undefined).length).toFixed(1) : '—';
+  }))].sort((a, b) => b.timestamp - a.timestamp), [stdReports, maneReports]);
+  const now = Date.now();
+  const periodMs = {
+    today: 86400000,
+    week: 7 * 86400000,
+    month: 30 * 86400000,
+    all: Infinity
+  };
+  const filtered = allReports.filter(r => {
+    const unitOk = unitFilter === 'all' || r.unit === unitFilter;
+    const periodOk = periodFilter === 'all' || now - (r.timestamp || 0) <= periodMs[periodFilter];
+    return unitOk && periodOk;
+  });
+  const withNota = filtered.filter(r => r.notaTurno !== undefined && r.notaTurno !== '');
+  const avgNota = withNota.length ? (withNota.reduce((s, r) => s + Number(r.notaTurno || 0), 0) / withNota.length).toFixed(1) : '—';
+  const withTma = filtered.filter(r => r.tma !== undefined && r.tma !== '');
+  const avgTma = withTma.length ? Math.round(withTma.reduce((s, r) => s + Number(r.tma || 0), 0) / withTma.length) : '—';
+  const ocorrencias = filtered.filter(r => r.temErroQualidade || r.temAtraso || r.temReclamacaoDemora || r.temReclamacaoAtendimento || r.deliveryAtraso).length;
   const byUnit = UNITS.map(u => ({
-    name: u.label,
-    count: allReports.filter(r => r.unit === u.id).length
+    name: u.label.replace(' Norte', 'N.').replace(' Sul', 'S.').replace('Águas Claras', 'Ág.Cl.').replace('Superquadra', 'Superq.'),
+    relatórios: allReports.filter(r => r.unit === u.id).length,
+    nota: (() => {
+      const rs = allReports.filter(r => r.unit === u.id && r.notaTurno !== '');
+      return rs.length ? (rs.reduce((s, r) => s + Number(r.notaTurno || 0), 0) / rs.length).toFixed(1) : 0;
+    })()
   }));
+  const kpis = [{
+    label: 'Relatórios',
+    value: filtered.length,
+    color: 'text-orange-500'
+  }, {
+    label: 'Nota média',
+    value: avgNota,
+    color: 'text-blue-500'
+  }, {
+    label: 'TMA médio',
+    value: avgTma === '—' ? '—' : avgTma + 'min',
+    color: 'text-green-500'
+  }, {
+    label: 'Ocorrências',
+    value: ocorrencias,
+    color: 'text-red-500'
+  }];
+  const PERIOD_LABELS = {
+    today: 'Hoje',
+    week: '7 dias',
+    month: '30 dias',
+    all: 'Tudo'
+  };
   return /*#__PURE__*/React.createElement("div", {
-    className: "px-4 pb-24 pt-4"
-  }, /*#__PURE__*/React.createElement("h2", {
+    className: "px-4 pb-24 pt-4 max-w-2xl mx-auto"
+  }, selectedReport && /*#__PURE__*/React.createElement(ReportModal, {
+    report: selectedReport,
+    onClose: () => setSelectedReport(null)
+  }), /*#__PURE__*/React.createElement("h2", {
     className: "text-lg font-bold text-slate-800 mb-4"
-  }, "Dashboard \u2014 Todas as Unidades"), /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDCCA Dashboard Operacional"), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2 mb-3"
+  }, Object.entries(PERIOD_LABELS).map(([k, l]) => /*#__PURE__*/React.createElement("button", {
+    key: k,
+    onClick: () => setPeriodFilter(k),
+    className: `flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${periodFilter === k ? 'bg-slate-800 text-white border-slate-800' : 'bg-white border-slate-200 text-slate-600'}`
+  }, l))), /*#__PURE__*/React.createElement("div", {
     className: "flex gap-2 overflow-x-auto pb-2 mb-4"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => setUnitFilter('all'),
@@ -1577,30 +1735,52 @@ const Dashboard = ({
     onClick: () => setUnitFilter(u.id),
     className: `shrink-0 px-3 py-1 rounded-full text-xs font-medium border ${unitFilter === u.id ? 'bg-orange-500 text-white border-orange-500' : 'bg-white border-slate-200 text-slate-600'}`
   }, u.label))), /*#__PURE__*/React.createElement("div", {
-    className: "grid grid-cols-3 gap-2 mb-5"
-  }, [{
-    label: 'Relatórios',
-    value: filtered.length
-  }, {
-    label: 'Nota média',
-    value: avgNota
-  }, {
-    label: 'Unidades ativas',
-    value: UNITS.filter(u => allReports.some(r => r.unit === u.id)).length
-  }].map(k => /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-4 gap-2 mb-5"
+  }, kpis.map(k => /*#__PURE__*/React.createElement("div", {
     key: k.label,
     className: "bg-white rounded-xl border border-slate-200 p-3 text-center shadow-sm"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "text-2xl font-bold text-orange-500"
+    className: `text-xl font-bold ${k.color}`
   }, k.value), /*#__PURE__*/React.createElement("div", {
-    className: "text-xs text-slate-500 mt-0.5"
-  }, k.label)))), BarChart && byUnit.some(u => u.count > 0) && /*#__PURE__*/React.createElement("div", {
+    className: "text-[10px] text-slate-500 mt-0.5 leading-tight"
+  }, k.label)))), filtered.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl border border-slate-200 p-4 mb-4 shadow-sm"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs font-bold text-slate-500 uppercase mb-3"
+  }, "Ocorr\xEAncias no per\xEDodo"), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 gap-2"
+  }, [{
+    label: 'Erro de qualidade',
+    count: filtered.filter(r => r.temErroQualidade).length
+  }, {
+    label: 'Atraso relevante',
+    count: filtered.filter(r => r.temAtraso || Number(r.pctAcima20) > 20).length
+  }, {
+    label: 'Reclamação cliente',
+    count: filtered.filter(r => r.temReclamacaoDemora || r.temReclamacaoAtendimento).length
+  }, {
+    label: 'Atraso delivery',
+    count: filtered.filter(r => r.deliveryAtraso).length
+  }, {
+    label: 'Falta colaborador',
+    count: filtered.filter(r => r.faltaAtraso).length
+  }, {
+    label: 'Equip. quebrado',
+    count: filtered.filter(r => r.equipamentoQuebrado).length
+  }].map(o => /*#__PURE__*/React.createElement("div", {
+    key: o.label,
+    className: "flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-xs text-slate-600"
+  }, o.label), /*#__PURE__*/React.createElement("span", {
+    className: `text-sm font-bold ${o.count > 0 ? 'text-red-500' : 'text-green-500'}`
+  }, o.count))))), BarChart && byUnit.some(u => u.relatórios > 0) && /*#__PURE__*/React.createElement("div", {
     className: "bg-white rounded-xl border border-slate-200 p-4 mb-4 shadow-sm"
   }, /*#__PURE__*/React.createElement("p", {
     className: "text-xs font-bold text-slate-500 uppercase mb-3"
   }, "Relat\xF3rios por unidade"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
     width: "100%",
-    height: 180
+    height: 160
   }, /*#__PURE__*/React.createElement(BarChart, {
     data: byUnit,
     margin: {
@@ -1622,13 +1802,44 @@ const Dashboard = ({
       fontSize: 10
     }
   }), /*#__PURE__*/React.createElement(Tooltip, null), /*#__PURE__*/React.createElement(Bar, {
-    dataKey: "count",
-    name: "Relat\xF3rios",
+    dataKey: "relat\xF3rios",
     fill: "#f97316",
     radius: [4, 4, 0, 0]
-  })))), filtered.length === 0 && /*#__PURE__*/React.createElement("p", {
-    className: "text-sm text-slate-400 text-center mt-10"
-  }, "Nenhum relat\xF3rio encontrado."));
+  })))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs font-bold text-slate-500 uppercase px-4 py-3 border-b border-slate-100"
+  }, "Relat\xF3rios recentes"), filtered.length === 0 ? /*#__PURE__*/React.createElement("p", {
+    className: "text-sm text-slate-400 text-center py-10"
+  }, "Nenhum relat\xF3rio encontrado.") : filtered.slice(0, 30).map(r => {
+    const unit = UNITS.find(u => u.id === r.unit);
+    const dt = r.date || r.reportDate || '';
+    const shift = r.shift || '';
+    const resp = r.responsible || r.manager || '';
+    const nota = r.notaTurno !== undefined && r.notaTurno !== '' ? Number(r.notaTurno) : null;
+    const hasOcorr = r.temErroQualidade || r.temAtraso || r.temReclamacaoDemora || r.temReclamacaoAtendimento || r.deliveryAtraso;
+    return /*#__PURE__*/React.createElement("div", {
+      key: r.id,
+      className: "flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: `w-8 h-8 rounded-lg ${unit?.color || 'bg-slate-400'} flex items-center justify-center text-white text-xs font-bold shrink-0`
+    }, (unit?.label || '?')[0]), /*#__PURE__*/React.createElement("div", {
+      className: "flex-1 min-w-0"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-sm font-semibold text-slate-800"
+    }, unit?.label || r.unit), /*#__PURE__*/React.createElement("div", {
+      className: "text-xs text-slate-500 truncate"
+    }, dt, " \xB7 ", shift, resp ? ' · ' + resp : '')), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-2 shrink-0"
+    }, hasOcorr && /*#__PURE__*/React.createElement("span", {
+      className: "w-2 h-2 rounded-full bg-red-400"
+    }), nota !== null && /*#__PURE__*/React.createElement("span", {
+      className: `text-xs font-bold ${nota >= 7 ? 'text-green-500' : nota >= 5 ? 'text-amber-500' : 'text-red-500'}`
+    }, nota, "/10"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => setSelectedReport(r),
+      className: "text-xs bg-orange-50 text-orange-600 border border-orange-200 rounded-lg px-2 py-1 font-medium hover:bg-orange-100 transition-colors"
+    }, "Ver")));
+  })));
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1641,6 +1852,8 @@ function App() {
   const [selUnit, setSelUnit] = React.useState(null);
   const [activeTab, setActiveTab] = React.useState('form');
   const [done, setDone] = React.useState(false);
+  const [lastReport, setLastReport] = React.useState(null);
+  const [showWA, setShowWA] = React.useState(false);
   React.useEffect(() => {
     const u1 = db.collection(COL_UNIDADES).onSnapshot(snap => {
       const d = snap.docs.map(d => ({
@@ -1669,6 +1882,10 @@ function App() {
     await db.collection(COL_UNIDADES).add({
       ...data,
       timestamp: Date.now()
+    });
+    setLastReport({
+      ...data,
+      _col: 'std'
     });
     setDone(true);
   };
@@ -1747,17 +1964,30 @@ function App() {
   // Success
   if (done) return /*#__PURE__*/React.createElement("div", {
     className: "min-h-screen bg-slate-50 flex flex-col items-center justify-center px-6 text-center"
-  }, /*#__PURE__*/React.createElement("div", {
+  }, showWA && lastReport && /*#__PURE__*/React.createElement(ReportModal, {
+    report: lastReport,
+    onClose: () => setShowWA(false)
+  }), /*#__PURE__*/React.createElement("div", {
     className: "text-5xl mb-4"
   }, "\u2705"), /*#__PURE__*/React.createElement("h2", {
     className: "text-xl font-bold text-slate-800"
   }, "Relat\xF3rio enviado!"), /*#__PURE__*/React.createElement("p", {
     className: "text-sm text-slate-500 mt-1 mb-6"
-  }, selUnit.label), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setDone(false),
+  }, selUnit.label), lastReport && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowWA(true),
+    className: "w-full max-w-xs bg-green-500 text-white py-3 rounded-xl font-semibold mb-3"
+  }, "\uD83D\uDCCB Ver relat\xF3rio WhatsApp"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setDone(false);
+      setLastReport(null);
+    },
     className: "w-full max-w-xs bg-orange-500 text-white py-3 rounded-xl font-semibold mb-3"
   }, "Novo relat\xF3rio"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setSelUnit(null),
+    onClick: () => {
+      setSelUnit(null);
+      setDone(false);
+      setLastReport(null);
+    },
     className: "w-full max-w-xs bg-white text-slate-600 border border-slate-200 py-3 rounded-xl font-semibold"
   }, "Trocar unidade"));
 
