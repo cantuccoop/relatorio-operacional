@@ -1656,6 +1656,13 @@ const Dashboard = ({
   const [unitFilter, setUnitFilter] = React.useState('all');
   const [periodFilter, setPeriodFilter] = React.useState('all');
   const [selectedReport, setSelectedReport] = React.useState(null);
+  const [confirmDelete, setConfirmDelete] = React.useState(null); // report to delete
+
+  const deleteReport = async r => {
+    const col = r._col === 'mane' ? COL_MANE : COL_UNIDADES;
+    await db.collection(col).doc(r.id).delete();
+    setConfirmDelete(null);
+  };
   const allReports = React.useMemo(() => [...stdReports.map(r => ({
     ...r,
     _col: 'std'
@@ -1717,7 +1724,25 @@ const Dashboard = ({
   }, selectedReport && /*#__PURE__*/React.createElement(ReportModal, {
     report: selectedReport,
     onClose: () => setSelectedReport(null)
-  }), /*#__PURE__*/React.createElement("h2", {
+  }), confirmDelete && /*#__PURE__*/React.createElement("div", {
+    className: "fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-6",
+    onClick: () => setConfirmDelete(null)
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-2xl p-6 w-full max-w-sm",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-bold text-slate-800 mb-2"
+  }, "Excluir relat\xF3rio?"), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm text-slate-500 mb-5"
+  }, UNITS.find(u => u.id === confirmDelete.unit)?.label || confirmDelete.unit, " \xB7 ", confirmDelete.date || confirmDelete.reportDate || '', " \xB7 ", confirmDelete.shift || '', /*#__PURE__*/React.createElement("br", null), "Esta a\xE7\xE3o n\xE3o pode ser desfeita."), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-3"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setConfirmDelete(null),
+    className: "flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm"
+  }, "Cancelar"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => deleteReport(confirmDelete),
+    className: "flex-1 py-2.5 rounded-xl bg-red-500 text-white font-semibold text-sm"
+  }, "Excluir")))), /*#__PURE__*/React.createElement("h2", {
     className: "text-lg font-bold text-slate-800 mb-4"
   }, "\uD83D\uDCCA Dashboard Operacional"), /*#__PURE__*/React.createElement("div", {
     className: "flex gap-2 mb-3"
@@ -1838,7 +1863,10 @@ const Dashboard = ({
     }, nota, "/10"), /*#__PURE__*/React.createElement("button", {
       onClick: () => setSelectedReport(r),
       className: "text-xs bg-orange-50 text-orange-600 border border-orange-200 rounded-lg px-2 py-1 font-medium hover:bg-orange-100 transition-colors"
-    }, "Ver")));
+    }, "Ver"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => setConfirmDelete(r),
+      className: "text-xs bg-red-50 text-red-500 border border-red-200 rounded-lg px-2 py-1 font-medium hover:bg-red-100 transition-colors"
+    }, "\uD83D\uDDD1")));
   })));
 };
 
