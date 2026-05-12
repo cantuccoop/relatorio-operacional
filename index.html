@@ -983,6 +983,100 @@ const maneValid = (step, f) => {
       return true;
   }
 };
+
+// ── Mané sub-components (defined OUTSIDE ManeForm to avoid remount on re-render)
+const MInput = ({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  placeholder = ''
+}) => /*#__PURE__*/React.createElement("div", {
+  className: "mb-4"
+}, /*#__PURE__*/React.createElement("label", {
+  className: "block text-sm font-medium text-slate-700 mb-1"
+}, label), type === 'textarea' ? /*#__PURE__*/React.createElement("textarea", {
+  className: "w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none",
+  rows: "3",
+  value: value,
+  onChange: e => onChange(e.target.value),
+  placeholder: placeholder
+}) : /*#__PURE__*/React.createElement("input", {
+  type: type,
+  className: "w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none",
+  value: value,
+  onChange: e => onChange(e.target.value),
+  placeholder: placeholder,
+  min: type === 'number' ? '0' : undefined
+}));
+const MBool = ({
+  label,
+  value,
+  onChange
+}) => /*#__PURE__*/React.createElement("div", {
+  className: "mb-4"
+}, /*#__PURE__*/React.createElement("label", {
+  className: "block text-sm font-medium text-slate-700 mb-2"
+}, label), /*#__PURE__*/React.createElement("div", {
+  className: "flex gap-2"
+}, [{
+  l: 'Sim',
+  v: true
+}, {
+  l: 'Não',
+  v: false
+}].map(o => /*#__PURE__*/React.createElement("button", {
+  key: o.l,
+  onClick: () => onChange(o.v),
+  className: `flex-1 py-3 rounded-lg border text-sm font-medium transition-all ${value === o.v ? o.v ? 'bg-amber-500 text-white border-amber-500' : 'bg-red-400 text-white border-red-400' : 'bg-white text-slate-700 border-slate-300'}`
+}, o.l))));
+const MRadio = ({
+  label,
+  value,
+  onChange,
+  options
+}) => /*#__PURE__*/React.createElement("div", {
+  className: "mb-4"
+}, /*#__PURE__*/React.createElement("label", {
+  className: "block text-sm font-medium text-slate-700 mb-2"
+}, label), /*#__PURE__*/React.createElement("div", {
+  className: "flex flex-wrap gap-2"
+}, options.map(o => /*#__PURE__*/React.createElement("button", {
+  key: o.val,
+  onClick: () => onChange(o.val),
+  className: `flex-1 min-w-[90px] py-3 px-3 rounded-lg border text-sm font-medium transition-all ${value === o.val ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-700 border-slate-300'}`
+}, o.label))));
+const ListRow = ({
+  item,
+  onItemChange,
+  onRemove,
+  showRemove
+}) => /*#__PURE__*/React.createElement("div", {
+  className: "flex gap-2 mb-3 items-start"
+}, /*#__PURE__*/React.createElement("input", {
+  type: "text",
+  placeholder: "Item",
+  className: "flex-1 p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500",
+  value: item.item,
+  onChange: e => onItemChange('item', e.target.value)
+}), /*#__PURE__*/React.createElement("div", {
+  className: "w-[130px] flex gap-1"
+}, /*#__PURE__*/React.createElement("input", {
+  type: "number",
+  placeholder: "Qtd",
+  className: "w-1/2 p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500 px-2",
+  value: item.quantity,
+  onChange: e => onItemChange('quantity', e.target.value)
+}), /*#__PURE__*/React.createElement("select", {
+  className: "w-1/2 p-2.5 border border-slate-300 rounded-lg text-sm outline-none bg-white px-1",
+  value: item.measureUnit,
+  onChange: e => onItemChange('measureUnit', e.target.value)
+}, /*#__PURE__*/React.createElement("option", null, "kg"), /*#__PURE__*/React.createElement("option", null, "g"), /*#__PURE__*/React.createElement("option", null, "L"), /*#__PURE__*/React.createElement("option", null, "ml"), /*#__PURE__*/React.createElement("option", null, "un"))), showRemove && /*#__PURE__*/React.createElement("button", {
+  onClick: onRemove,
+  className: "p-2.5 text-slate-400 hover:text-red-500 rounded-lg"
+}, /*#__PURE__*/React.createElement(MI.Trash2, {
+  size: 18
+})));
 const ManeForm = ({
   onSubmit,
   onBack
@@ -1040,97 +1134,6 @@ const ManeForm = ({
       }]
     };
   });
-  const MInput = ({
-    label,
-    value,
-    field,
-    type = 'text',
-    placeholder = ''
-  }) => /*#__PURE__*/React.createElement("div", {
-    className: "mb-4"
-  }, /*#__PURE__*/React.createElement("label", {
-    className: "block text-sm font-medium text-slate-700 mb-1"
-  }, label), type === 'textarea' ? /*#__PURE__*/React.createElement("textarea", {
-    className: "w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none",
-    rows: "3",
-    value: value,
-    onChange: e => set(field, e.target.value),
-    placeholder: placeholder
-  }) : /*#__PURE__*/React.createElement("input", {
-    type: type,
-    className: "w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none",
-    value: value,
-    onChange: e => set(field, e.target.value),
-    placeholder: placeholder,
-    min: type === 'number' ? '0' : undefined
-  }));
-  const MBool = ({
-    label,
-    value,
-    field
-  }) => /*#__PURE__*/React.createElement("div", {
-    className: "mb-4"
-  }, /*#__PURE__*/React.createElement("label", {
-    className: "block text-sm font-medium text-slate-700 mb-2"
-  }, label), /*#__PURE__*/React.createElement("div", {
-    className: "flex gap-2"
-  }, [{
-    l: 'Sim',
-    v: true
-  }, {
-    l: 'Não',
-    v: false
-  }].map(o => /*#__PURE__*/React.createElement("button", {
-    key: o.l,
-    onClick: () => set(field, o.v),
-    className: `flex-1 py-3 rounded-lg border text-sm font-medium transition-all ${value === o.v ? o.v ? 'bg-amber-500 text-white border-amber-500' : 'bg-red-400 text-white border-red-400' : 'bg-white text-slate-700 border-slate-300'}`
-  }, o.l))));
-  const MRadio = ({
-    label,
-    value,
-    field,
-    options
-  }) => /*#__PURE__*/React.createElement("div", {
-    className: "mb-4"
-  }, /*#__PURE__*/React.createElement("label", {
-    className: "block text-sm font-medium text-slate-700 mb-2"
-  }, label), /*#__PURE__*/React.createElement("div", {
-    className: "flex flex-wrap gap-2"
-  }, options.map(o => /*#__PURE__*/React.createElement("button", {
-    key: o.val,
-    onClick: () => set(field, o.val),
-    className: `flex-1 min-w-[90px] py-3 px-3 rounded-lg border text-sm font-medium transition-all ${value === o.val ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-700 border-slate-300'}`
-  }, o.label))));
-  const ListRow = ({
-    lf,
-    idx,
-    item
-  }) => /*#__PURE__*/React.createElement("div", {
-    className: "flex gap-2 mb-3 items-start"
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "text",
-    placeholder: "Item",
-    className: "flex-1 p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500",
-    value: item.item,
-    onChange: e => listChange(lf, idx, 'item', e.target.value)
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "w-[130px] flex gap-1"
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "number",
-    placeholder: "Qtd",
-    className: "w-1/2 p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500 px-2",
-    value: item.quantity,
-    onChange: e => listChange(lf, idx, 'quantity', e.target.value)
-  }), /*#__PURE__*/React.createElement("select", {
-    className: "w-1/2 p-2.5 border border-slate-300 rounded-lg text-sm outline-none bg-white px-1",
-    value: item.measureUnit,
-    onChange: e => listChange(lf, idx, 'measureUnit', e.target.value)
-  }, /*#__PURE__*/React.createElement("option", null, "kg"), /*#__PURE__*/React.createElement("option", null, "g"), /*#__PURE__*/React.createElement("option", null, "L"), /*#__PURE__*/React.createElement("option", null, "ml"), /*#__PURE__*/React.createElement("option", null, "un"))), f[lf].length > 1 && /*#__PURE__*/React.createElement("button", {
-    onClick: () => listRemove(lf, idx),
-    className: "p-2.5 text-slate-400 hover:text-red-500 rounded-lg"
-  }, /*#__PURE__*/React.createElement(MI.Trash2, {
-    size: 18
-  })));
   const PerfBlock = ({
     prefix
   }) => /*#__PURE__*/React.createElement("div", {
@@ -1143,31 +1146,31 @@ const ManeForm = ({
   }), " A\xE7\xE3o Corretiva (PERF)"), /*#__PURE__*/React.createElement(MInput, {
     label: "P \u2014 Processo",
     value: f[`${prefix}Process`],
-    field: `${prefix}Process`,
+    onChange: v => set(`${prefix}Process`, v),
     type: "textarea",
     placeholder: "Existe algum processo que evitaria esse erro?"
   }), /*#__PURE__*/React.createElement(MInput, {
     label: "E \u2014 Execu\xE7\xE3o",
     value: f[`${prefix}Execution`],
-    field: `${prefix}Execution`,
+    onChange: v => set(`${prefix}Execution`, v),
     type: "textarea",
     placeholder: "Esse processo foi realizado neste turno?"
   }), /*#__PURE__*/React.createElement(MInput, {
     label: "R \u2014 Rito",
     value: f[`${prefix}Rite`],
-    field: `${prefix}Rite`,
+    onChange: v => set(`${prefix}Rite`, v),
     type: "textarea",
     placeholder: "Foi realizado no momento correto?"
   }), /*#__PURE__*/React.createElement(MInput, {
     label: "F \u2014 Fiscaliza\xE7\xE3o",
     value: f[`${prefix}Fiscalization`],
-    field: `${prefix}Fiscalization`,
+    onChange: v => set(`${prefix}Fiscalization`, v),
     type: "textarea",
     placeholder: "Identifique poss\xEDveis falhas de execu\xE7\xE3o"
   }), /*#__PURE__*/React.createElement(MInput, {
     label: "Prazo para A\xE7\xE3o",
     value: f[`${prefix}Deadline`],
-    field: `${prefix}Deadline`,
+    onChange: v => set(`${prefix}Deadline`, v),
     type: "date"
   }));
   const TITLES = ['', '1. Dados Iniciais', '2. Registro da Operação', '3. TMA', '4. Cancelamentos e Rupturas', '5. Clientes', '6. Desperdícios', '7. Maturidade Operacional', '8. Infraestrutura', '9. Desvios 1:1'];
@@ -1257,12 +1260,12 @@ const ManeForm = ({
   }, step === 1 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(MInput, {
     label: "Data do Relat\xF3rio",
     value: f.reportDate,
-    field: "reportDate",
+    onChange: v => set('reportDate', v),
     type: "date"
   }), /*#__PURE__*/React.createElement(MRadio, {
     label: "Gestor Respons\xE1vel",
     value: f.manager,
-    field: "manager",
+    onChange: v => set('manager', v),
     options: RESPONSAVEIS.mane.map(g => ({
       label: g,
       val: g
@@ -1270,7 +1273,7 @@ const ManeForm = ({
   }), /*#__PURE__*/React.createElement(MRadio, {
     label: "Turno",
     value: f.shift,
-    field: "shift",
+    onChange: v => set('shift', v),
     options: TURNOS_MANE.map(t => ({
       label: t,
       val: t
@@ -1278,7 +1281,7 @@ const ManeForm = ({
   })), step === 2 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(MBool, {
     label: "Ocorreram erros de prato no turno?",
     value: f.hadFoodErrors,
-    field: "hadFoodErrors"
+    onChange: v => set('hadFoodErrors', v)
   }), f.hadFoodErrors && /*#__PURE__*/React.createElement("div", {
     className: "mt-3 p-4 bg-slate-50 rounded-lg border border-slate-200"
   }, /*#__PURE__*/React.createElement("label", {
@@ -1298,11 +1301,11 @@ const ManeForm = ({
   }, e)))), f.foodErrors.includes('Outro') && /*#__PURE__*/React.createElement(MInput, {
     label: "Descri\xE7\xE3o do outro erro",
     value: f.otherFoodError,
-    field: "otherFoodError"
+    onChange: v => set('otherFoodError', v)
   }), /*#__PURE__*/React.createElement(MInput, {
     label: "Solu\xE7\xF5es tomadas",
     value: f.foodErrorSolutions,
-    field: "foodErrorSolutions",
+    onChange: v => set('foodErrorSolutions', v),
     type: "textarea",
     placeholder: "Como os erros foram resolvidos?"
   }))), step === 3 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
@@ -1310,17 +1313,17 @@ const ManeForm = ({
   }, /*#__PURE__*/React.createElement(MInput, {
     label: "TMA do turno (min)",
     value: f.tmaAverage,
-    field: "tmaAverage",
+    onChange: v => set('tmaAverage', v),
     type: "number"
   }), /*#__PURE__*/React.createElement(MInput, {
     label: "% Acima de 15min",
     value: f.tmaAbove15,
-    field: "tmaAbove15",
+    onChange: v => set('tmaAbove15', v),
     type: "number"
   })), (Number(f.tmaAverage) > 15 || Number(f.tmaAbove15) > 15) && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(MInput, {
     label: "Gargalo identificado",
     value: f.tmaBottleneck,
-    field: "tmaBottleneck",
+    onChange: v => set('tmaBottleneck', v),
     type: "textarea",
     placeholder: "Ex: Sa\xEDda da pra\xE7a acumulou no pico."
   }), /*#__PURE__*/React.createElement(PerfBlock, {
@@ -1328,12 +1331,12 @@ const ManeForm = ({
   }))), step === 4 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(MInput, {
     label: "N\xBA de cancelamentos",
     value: f.cancelationsCount,
-    field: "cancelationsCount",
+    onChange: v => set('cancelationsCount', v),
     type: "number"
   }), Number(f.cancelationsCount) > 0 && /*#__PURE__*/React.createElement(MInput, {
     label: "Motivos dos cancelamentos",
     value: f.cancelationsReasons,
-    field: "cancelationsReasons",
+    onChange: v => set('cancelationsReasons', v),
     type: "textarea",
     placeholder: "Ex: Cliente desistiu..."
   }), /*#__PURE__*/React.createElement("div", {
@@ -1341,16 +1344,17 @@ const ManeForm = ({
   }, /*#__PURE__*/React.createElement(MBool, {
     label: "Tivemos rupturas durante a opera\xE7\xE3o?",
     value: f.hadStockOuts,
-    field: "hadStockOuts"
+    onChange: v => set('hadStockOuts', v)
   }), f.hadStockOuts && /*#__PURE__*/React.createElement("div", {
     className: "mt-3 p-4 bg-slate-50 rounded-lg border"
   }, /*#__PURE__*/React.createElement("p", {
     className: "text-sm font-semibold mb-3"
   }, "Itens em Ruptura"), f.stockOutList.map((s, i) => /*#__PURE__*/React.createElement(ListRow, {
     key: i,
-    lf: "stockOutList",
-    idx: i,
-    item: s
+    item: s,
+    onItemChange: (k, v) => listChange('stockOutList', i, k, v),
+    onRemove: () => listRemove('stockOutList', i),
+    showRemove: f.stockOutList.length > 1
   })), /*#__PURE__*/React.createElement("button", {
     onClick: () => listAdd('stockOutList'),
     className: "text-amber-600 text-sm font-semibold flex items-center mb-2"
@@ -1362,13 +1366,13 @@ const ManeForm = ({
   })))), step === 5 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(MBool, {
     label: "Tivemos relatos ou reclama\xE7\xF5es de clientes?",
     value: f.hadCustomerComplaints,
-    field: "hadCustomerComplaints"
+    onChange: v => set('hadCustomerComplaints', v)
   }), f.hadCustomerComplaints && /*#__PURE__*/React.createElement("div", {
     className: "mt-3 p-4 bg-slate-50 rounded-lg border"
   }, /*#__PURE__*/React.createElement(MInput, {
     label: "Quais reclama\xE7\xF5es?",
     value: f.customerComplaints,
-    field: "customerComplaints",
+    onChange: v => set('customerComplaints', v),
     type: "textarea",
     placeholder: "Descreva..."
   })), /*#__PURE__*/React.createElement("div", {
@@ -1376,28 +1380,29 @@ const ManeForm = ({
   }, /*#__PURE__*/React.createElement(MInput, {
     label: "Relato geral dos chefes de fila",
     value: f.waiterReports,
-    field: "waiterReports",
+    onChange: v => set('waiterReports', v),
     type: "textarea",
     placeholder: "Feedback da opera\xE7\xE3o de sal\xE3o..."
   }))), step === 6 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(MBool, {
     label: "Foi realizada a confer\xEAncia das planilhas de controle de desperd\xEDcio?",
     value: f.wasteChecked,
-    field: "wasteChecked"
+    onChange: v => set('wasteChecked', v)
   }), /*#__PURE__*/React.createElement("div", {
     className: "mt-4 border-t pt-4"
   }, /*#__PURE__*/React.createElement(MBool, {
     label: "Houve desperd\xEDcio a ser registrado?",
     value: f.hadWaste,
-    field: "hadWaste"
+    onChange: v => set('hadWaste', v)
   }), f.hadWaste && /*#__PURE__*/React.createElement("div", {
     className: "mt-3 p-4 bg-slate-50 rounded-lg border"
   }, /*#__PURE__*/React.createElement("p", {
     className: "text-sm font-semibold mb-3"
   }, "Itens Desperdi\xE7ados"), f.wasteList.map((w, i) => /*#__PURE__*/React.createElement(ListRow, {
     key: i,
-    lf: "wasteList",
-    idx: i,
-    item: w
+    item: w,
+    onItemChange: (k, v) => listChange('wasteList', i, k, v),
+    onRemove: () => listRemove('wasteList', i),
+    showRemove: f.wasteList.length > 1
   })), /*#__PURE__*/React.createElement("button", {
     onClick: () => listAdd('wasteList'),
     className: "text-amber-600 text-sm font-semibold flex items-center mb-2"
@@ -1409,7 +1414,7 @@ const ManeForm = ({
   }, /*#__PURE__*/React.createElement(MInput, {
     label: "Anota\xE7\xF5es / Justificativas",
     value: f.wasteNotes,
-    field: "wasteNotes",
+    onChange: v => set('wasteNotes', v),
     type: "textarea",
     placeholder: "Observa\xE7\xF5es gerais..."
   })))), step === 7 && /*#__PURE__*/React.createElement("div", {
@@ -1417,21 +1422,21 @@ const ManeForm = ({
   }, /*#__PURE__*/React.createElement(MBool, {
     label: "Os checklists de abertura foram preenchidos?",
     value: f.checklistsDone,
-    field: "checklistsDone"
+    onChange: v => set('checklistsDone', v)
   }), /*#__PURE__*/React.createElement(MBool, {
     label: "Os quadros operacionais foram preenchidos?",
     value: f.boardsDone,
-    field: "boardsDone"
+    onChange: v => set('boardsDone', v)
   }), /*#__PURE__*/React.createElement(MBool, {
     label: "As reuni\xF5es de Pr\xE9-shift foram realizadas?",
     value: f.preShiftDone,
-    field: "preShiftDone"
+    onChange: v => set('preShiftDone', v)
   }), f.preShiftDone && /*#__PURE__*/React.createElement("div", {
     className: "p-4 bg-slate-50 rounded-lg border"
   }, /*#__PURE__*/React.createElement(MInput, {
     label: "Ata da reuni\xE3o de pr\xE9-shift",
     value: f.preShiftNotes,
-    field: "preShiftNotes",
+    onChange: v => set('preShiftNotes', v),
     type: "textarea",
     placeholder: "Principais pontos abordados..."
   })), (f.checklistsDone === false || f.boardsDone === false || f.preShiftDone === false) && /*#__PURE__*/React.createElement("div", {
@@ -1439,56 +1444,57 @@ const ManeForm = ({
   }, /*#__PURE__*/React.createElement(MInput, {
     label: "Por que n\xE3o foi realizado?",
     value: f.maturityReason,
-    field: "maturityReason",
+    onChange: v => set('maturityReason', v),
     type: "textarea",
     placeholder: "Justifique..."
   }))), step === 8 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(MBool, {
     label: "Tivemos problema de sistema?",
     value: f.sysIssues,
-    field: "sysIssues"
+    onChange: v => set('sysIssues', v)
   }), f.sysIssues && /*#__PURE__*/React.createElement("div", {
     className: "mb-4 p-4 bg-slate-50 rounded-lg border"
   }, /*#__PURE__*/React.createElement(MInput, {
     label: "Qual foi o problema?",
     value: f.sysIssueDesc,
-    field: "sysIssueDesc",
+    onChange: v => set('sysIssueDesc', v),
     type: "textarea"
   }), /*#__PURE__*/React.createElement(MInput, {
     label: "Prazo de solu\xE7\xE3o",
     value: f.sysSolutionDeadline,
-    field: "sysSolutionDeadline",
+    onChange: v => set('sysSolutionDeadline', v),
     type: "date"
   })), /*#__PURE__*/React.createElement("div", {
     className: "border-t pt-4"
   }, /*#__PURE__*/React.createElement(MBool, {
     label: "Temos algum equipamento quebrado?",
     value: f.equipIssues,
-    field: "equipIssues"
+    onChange: v => set('equipIssues', v)
   }), f.equipIssues && /*#__PURE__*/React.createElement("div", {
     className: "mt-2 p-4 bg-slate-50 rounded-lg border"
   }, /*#__PURE__*/React.createElement(MInput, {
     label: "Qual equipamento?",
     value: f.equipIssueDesc,
-    field: "equipIssueDesc",
+    onChange: v => set('equipIssueDesc', v),
     type: "textarea"
   }), /*#__PURE__*/React.createElement(MInput, {
     label: "Prazo de solu\xE7\xE3o",
     value: f.equipSolutionDeadline,
-    field: "equipSolutionDeadline",
+    onChange: v => set('equipSolutionDeadline', v),
     type: "date"
   })))), step === 9 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(MBool, {
     label: "Houve desvio 1:1?",
     value: f.hadDeviations,
-    field: "hadDeviations"
+    onChange: v => set('hadDeviations', v)
   }), f.hadDeviations && /*#__PURE__*/React.createElement("div", {
     className: "mt-3 p-4 bg-slate-50 rounded-lg border"
   }, /*#__PURE__*/React.createElement("p", {
     className: "text-sm font-semibold mb-3"
   }, "Itens com Desvio"), f.deviationsList.map((d, i) => /*#__PURE__*/React.createElement(ListRow, {
     key: i,
-    lf: "deviationsList",
-    idx: i,
-    item: d
+    item: d,
+    onItemChange: (k, v) => listChange('deviationsList', i, k, v),
+    onRemove: () => listRemove('deviationsList', i),
+    showRemove: f.deviationsList.length > 1
   })), /*#__PURE__*/React.createElement("button", {
     onClick: () => listAdd('deviationsList'),
     className: "text-amber-600 text-sm font-semibold flex items-center mb-4"
@@ -1500,12 +1506,12 @@ const ManeForm = ({
   }, /*#__PURE__*/React.createElement(MInput, {
     label: "Justificativa do desvio",
     value: f.deviationJustification,
-    field: "deviationJustification",
+    onChange: v => set('deviationJustification', v),
     type: "textarea"
   }), /*#__PURE__*/React.createElement(MInput, {
     label: "A\xE7\xE3o corretiva",
     value: f.deviationAction,
-    field: "deviationAction",
+    onChange: v => set('deviationAction', v),
     type: "textarea"
   })))))), /*#__PURE__*/React.createElement("div", {
     className: "fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3 flex gap-3 max-w-2xl mx-auto"
