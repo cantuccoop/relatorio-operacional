@@ -83,6 +83,34 @@ const MOVIMENTOS = ['Fraco', 'Médio', 'Forte', 'Fortíssimo'];
 const TURNOS_STD = ['Manhã', 'Noite'];
 const TURNOS_MANE = ['Dia', 'Noite'];
 const ERROS_PRATO = ['Prato frio', 'Carne fora do ponto', 'Carne dura', 'Demora na entrega', 'Prato errado', 'Prato fora do padrão (qualidade)', 'Prato fora do padrão (quantidade)', 'Outro'];
+
+// ── Clipboard helper ─────────────────────────────────────────────────────────
+const copyText = text => new Promise(resolve => {
+  if (!text) {
+    resolve(false);
+    return;
+  }
+  const doExec = () => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      resolve(ok);
+    } catch (e) {
+      resolve(false);
+    }
+  };
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => resolve(true)).catch(doExec);
+  } else {
+    doExec();
+  }
+});
 const getToday = () => {
   const n = new Date();
   if (n.getHours() < 5) n.setDate(n.getDate() - 1);
@@ -1171,17 +1199,19 @@ const ManeForm = ({
     s += '\n_Relatório gerado via App_';
     return s;
   };
+  const [maneCopied, setManeCopied] = React.useState(false);
   const copy = () => {
-    const ta = document.createElement('textarea');
-    ta.value = genSummary();
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-      document.execCommand('copy');
-    } catch (e) {}
-    document.body.removeChild(ta);
-    setSummary(false);
-    onSubmit(null); // signal to go back to success screen
+    copyText(genSummary()).then(ok => {
+      if (ok) {
+        setManeCopied(true);
+        setTimeout(() => {
+          setSummary(false);
+          onSubmit(null);
+        }, 1500);
+      } else {
+        alert('Não foi possível copiar automaticamente.\n\nSelecione o texto manualmente e copie.');
+      }
+    });
   };
   const submit = async () => {
     if (!maneValid(step, f)) return;
@@ -1524,11 +1554,11 @@ const ManeForm = ({
     className: "bg-slate-50 p-4 rounded-lg border mb-6 max-h-60 overflow-y-auto text-sm whitespace-pre-wrap font-mono text-slate-600"
   }, genSummary()), /*#__PURE__*/React.createElement("button", {
     onClick: copy,
-    className: "w-full flex items-center justify-center py-3 bg-green-600 text-white rounded-xl font-bold"
+    className: `w-full flex items-center justify-center py-3 rounded-xl font-bold transition-all ${maneCopied ? 'bg-green-400 text-white' : 'bg-green-600 text-white'}`
   }, /*#__PURE__*/React.createElement(MI.Copy, {
     size: 20,
     className: "mr-2"
-  }), " Copiar e Fechar")))));
+  }), " ", maneCopied ? '✓ Copiado! Fechando...' : 'Copiar para WhatsApp')))));
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1639,27 +1669,14 @@ const ReportModal = ({
   const isStd = r._col === 'std';
   const text = isStd ? stdWAText(r) : r._waText || '';
   const copy = () => {
-    const fallback = () => {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    };
-    if (navigator.clipboard && text) {
-      navigator.clipboard.writeText(text).then(() => {
+    copyText(text).then(ok => {
+      if (ok) {
         setCopied(true);
         setTimeout(() => setCopied(false), 2500);
-      }).catch(fallback);
-    } else {
-      fallback();
-    }
+      } else {
+        alert('Não foi possível copiar automaticamente.\n\nSelecione o texto manualmente e copie.');
+      }
+    });
   };
   const unit = UNITS.find(u => u.id === r.unit);
   const nota = r.notaTurno !== undefined && r.notaTurno !== '' ? Number(r.notaTurno) : null;
