@@ -83,6 +83,8 @@ const MOVIMENTOS = ['Fraco', 'Médio', 'Forte', 'Fortíssimo'];
 const TURNOS_STD = ['Manhã', 'Noite'];
 const TURNOS_MANE = ['Dia', 'Noite'];
 const ERROS_PRATO = ['Prato frio', 'Carne fora do ponto', 'Carne dura', 'Demora na entrega', 'Prato errado', 'Prato fora do padrão (qualidade)', 'Prato fora do padrão (quantidade)', 'Outro'];
+const CHECKLISTS_STD  = ['Cozinha Cantucci','Cozinha Grano/Inforno','Parrilla','Salão','Caixa','Bar','Asg','Gerente','Fechamento salão'];
+const CHECKLISTS_MANE = ['Abertura de Turno - Véi Chico','Abertura de Turno - SPQ (mané)','Fechamento - Véi Chico (mané)','Fechamento - SPQ (mané)'];
 
 // ── Clipboard helper ─────────────────────────────────────────────────────────
 const copyText = text => new Promise(resolve => {
@@ -252,7 +254,7 @@ const STD_EMPTY = {
   deliveryCortesia: null,
   deliveryCortesiaDesc: '',
   checklistsOk: null,
-  checklistsDesc: '',
+  checklistsDesc: [],
   faltaAtraso: null,
   faltaAtrasoDesc: '',
   problemaSistema: null,
@@ -292,6 +294,7 @@ const stdValid = (step, f) => {
       return true;
     case 5:
       if ([f.checklistsOk, f.faltaAtraso, f.problemaSistema, f.equipamentoQuebrado].some(v => v === null)) return false;
+      if (f.checklistsOk === false && (!f.checklistsDesc || f.checklistsDesc.length === 0)) return false;
       if (f.equipamentoQuebrado && (!f.equipamentoDesc || !f.equipamentoAcao || !f.equipamentoPrazo)) return false;
       return true;
     case 6:
@@ -677,16 +680,26 @@ const StdForm = ({
   }, /*#__PURE__*/React.createElement(YesNo, {
     value: f.checklistsOk,
     onChange: v => set('checklistsOk', v)
-  })), /*#__PURE__*/React.createElement(CBox, {
-    show: f.checklistsOk === false
-  }, /*#__PURE__*/React.createElement(SField, {
-    label: "Qual n\xE3o foi realizado?"
-  }, /*#__PURE__*/React.createElement(STextarea, {
-    value: f.checklistsDesc,
-    onChange: e => set('checklistsDesc', e.target.value),
-    placeholder: "Descreva qual e o motivo",
-    rows: 2
-  }))), /*#__PURE__*/React.createElement(SField, {
+  })), f.checklistsOk === false && /*#__PURE__*/React.createElement("div", {className:"mt-1 mb-3"},
+    /*#__PURE__*/React.createElement("p", {className:"text-xs font-medium text-slate-600 mb-2"}, "Quais não foram realizados? *"),
+    /*#__PURE__*/React.createElement("div", {className:"grid grid-cols-2 gap-1.5"},
+      CHECKLISTS_STD.map(opt => /*#__PURE__*/React.createElement("label", {
+        key: opt,
+        className: `flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-sm transition-all ${(f.checklistsDesc||[]).includes(opt) ? 'bg-orange-50 border-orange-400 text-orange-700 font-medium' : 'bg-white border-slate-200 text-slate-700'}`
+      },
+        /*#__PURE__*/React.createElement("input", {
+          type: "checkbox",
+          className: "accent-orange-500",
+          checked: (f.checklistsDesc||[]).includes(opt),
+          onChange: () => {
+            const cur = f.checklistsDesc||[];
+            set('checklistsDesc', cur.includes(opt) ? cur.filter(x=>x!==opt) : [...cur, opt]);
+          }
+        }),
+        opt
+      ))
+    )
+  ), /*#__PURE__*/React.createElement(SField, {
     label: "Houve falta ou atraso de equipe?",
     required: true
   }, /*#__PURE__*/React.createElement(YesNo, {
@@ -906,7 +919,7 @@ const MANE_EMPTY = {
     measureUnit: 'un'
   }],
   wasteNotes: '',
-  checklistsDone: null,
+  checklistsDone: null, checklistsNotDone: [],
   boardsDone: null,
   preShiftDone: null,
   maturityReason: '',
@@ -964,7 +977,8 @@ const maneValid = (step, f) => {
       return true;
     case 7:
       if (f.checklistsDone === null || f.boardsDone === null || f.preShiftDone === null) return false;
-      if ((!f.checklistsDone || !f.boardsDone || !f.preShiftDone) && !f.maturityReason) return false;
+      if (f.checklistsDone === false && (!f.checklistsNotDone || f.checklistsNotDone.length === 0)) return false;
+      if ((!f.boardsDone || !f.preShiftDone) && !f.maturityReason) return false;
       if (f.preShiftDone && !f.preShiftNotes) return false;
       return true;
     case 8:
@@ -1431,7 +1445,26 @@ const ManeForm = ({
     label: "As reuni\xF5es de Pr\xE9-shift foram realizadas?",
     value: f.preShiftDone,
     onChange: v => set('preShiftDone', v)
-  }), f.preShiftDone && /*#__PURE__*/React.createElement("div", {
+  }), f.checklistsDone === false && /*#__PURE__*/React.createElement("div", {className:"mt-1 mb-3 p-3 bg-slate-50 rounded-xl border border-slate-200"},
+    /*#__PURE__*/React.createElement("p", {className:"text-xs font-medium text-slate-600 mb-2"}, "Quais não foram realizados? *"),
+    /*#__PURE__*/React.createElement("div", {className:"flex flex-col gap-1.5"},
+      CHECKLISTS_MANE.map(opt => /*#__PURE__*/React.createElement("label", {
+        key: opt,
+        className: `flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-sm transition-all ${(f.checklistsNotDone||[]).includes(opt) ? 'bg-amber-50 border-amber-400 text-amber-700 font-medium' : 'bg-white border-slate-200 text-slate-700'}`
+      },
+        /*#__PURE__*/React.createElement("input", {
+          type: "checkbox",
+          className: "accent-amber-500",
+          checked: (f.checklistsNotDone||[]).includes(opt),
+          onChange: () => {
+            const cur = f.checklistsNotDone||[];
+            set('checklistsNotDone', cur.includes(opt) ? cur.filter(x=>x!==opt) : [...cur, opt]);
+          }
+        }),
+        opt
+      ))
+    )
+  ), f.preShiftDone && /*#__PURE__*/React.createElement("div", {
     className: "p-4 bg-slate-50 rounded-lg border"
   }, /*#__PURE__*/React.createElement(MInput, {
     label: "Ata da reuni\xE3o de pr\xE9-shift",
@@ -1439,10 +1472,10 @@ const ManeForm = ({
     onChange: v => set('preShiftNotes', v),
     type: "textarea",
     placeholder: "Principais pontos abordados..."
-  })), (f.checklistsDone === false || f.boardsDone === false || f.preShiftDone === false) && /*#__PURE__*/React.createElement("div", {
+  })), (f.boardsDone === false || f.preShiftDone === false) && /*#__PURE__*/React.createElement("div", {
     className: "border-t pt-4"
   }, /*#__PURE__*/React.createElement(MInput, {
-    label: "Por que n\xE3o foi realizado?",
+    label: "Por que não foi realizado?",
     value: f.maturityReason,
     onChange: v => set('maturityReason', v),
     type: "textarea",
@@ -1674,7 +1707,8 @@ const stdWAText = r => {
   }
   lines.push('');
   lines.push('⚙️ Operação');
-  lines.push(`Checklists ok: ${yn(r.checklistsOk)}${r.checklistsDesc ? ' — ' + r.checklistsDesc : ''}`);
+  const clDesc = Array.isArray(r.checklistsDesc) ? r.checklistsDesc.join(', ') : (r.checklistsDesc||'');
+  lines.push(`Checklists ok: ${yn(r.checklistsOk)}${clDesc ? ' — ' + clDesc : ''}`);
   lines.push(`Falta/atraso colaborador: ${yn(r.faltaAtraso)}${r.faltaAtrasoDesc ? ' — ' + r.faltaAtrasoDesc : ''}`);
   lines.push(`Problema sistema: ${yn(r.problemaSistema)}${r.sistemaDesc ? ' — ' + r.sistemaDesc : ''}`);
   lines.push(`Equipamento quebrado: ${yn(r.equipamentoQuebrado)}`);
@@ -1875,9 +1909,9 @@ const ReportModal = ({
     label: "Checklists ok",
     value: yn(r.checklistsOk),
     ok: r.checklistsOk
-  }), !r.checklistsOk && r.checklistsDesc && /*#__PURE__*/React.createElement(RRow, {
-    label: "O que faltou",
-    value: r.checklistsDesc
+  }), !r.checklistsOk && r.checklistsDesc && r.checklistsDesc.length > 0 && /*#__PURE__*/React.createElement(RRow, {
+    label: "Não realizados",
+    value: Array.isArray(r.checklistsDesc) ? r.checklistsDesc.join(', ') : r.checklistsDesc
   }), /*#__PURE__*/React.createElement(RRow, {
     label: "Falta/atraso colaborador",
     value: yn(r.faltaAtraso),
