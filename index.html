@@ -38,8 +38,6 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const COL_UNIDADES = 'unidades_reports';
 const COL_MANE = 'mane_reports';
-const COL_CONFIG = 'config';
-const RESP_DOC = 'responsaveis';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const UNITS = [{
@@ -2231,100 +2229,6 @@ const Dashboard = ({
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN APP
 // ══════════════════════════════════════════════════════════════════════════════
-// ── Gerenciar Equipe ──────────────────────────────────────────────────────────
-const GerenciarEquipe = ({responsaveis: initial, onSave, onBack}) => {
-  const [pass, setPass] = React.useState('');
-  const [auth, setAuth] = React.useState(false);
-  const [passErr, setPassErr] = React.useState(false);
-  const [resp, setResp] = React.useState(JSON.parse(JSON.stringify(initial)));
-  const [newName, setNewName] = React.useState({});
-  const [saving, setSaving] = React.useState(false);
-
-  const tryAuth = () => {
-    if(pass === 'grupo3v') { setAuth(true); setPassErr(false); }
-    else { setPassErr(true); setTimeout(()=>setPassErr(false),2000); }
-  };
-
-  const addName = (uid) => {
-    const n = (newName[uid]||'').trim();
-    if(!n) return;
-    setResp(r => ({...r, [uid]: [...(r[uid]||[]), n]}));
-    setNewName(nn => ({...nn, [uid]: ''}));
-  };
-  const removeName = (uid, idx) => {
-    setResp(r => ({...r, [uid]: r[uid].filter((_,i)=>i!==idx)}));
-  };
-  const save = async () => {
-    setSaving(true);
-    await onSave(resp);
-    setSaving(false);
-  };
-
-  if(!auth) return /*#__PURE__*/React.createElement("div", {className:"min-h-screen bg-slate-50 flex flex-col items-center justify-center px-6"},
-    /*#__PURE__*/React.createElement("div", {className:"bg-white rounded-2xl p-8 w-full max-w-sm shadow-sm border border-slate-200"},
-      /*#__PURE__*/React.createElement("div", {className:"text-3xl text-center mb-2"}, "👥"),
-      /*#__PURE__*/React.createElement("h2", {className:"text-lg font-bold text-slate-800 text-center mb-1"}, "Gerenciar Equipe"),
-      /*#__PURE__*/React.createElement("p", {className:"text-sm text-slate-500 text-center mb-5"}, "Digite a senha para continuar"),
-      /*#__PURE__*/React.createElement("input", {
-        type:"password", value:pass,
-        onChange:e=>setPass(e.target.value),
-        onKeyDown:e=>e.key==='Enter'&&tryAuth(),
-        placeholder:"Senha",
-        className:`w-full border rounded-xl px-3 py-3 text-sm mb-2 focus:outline-none focus:ring-2 ${passErr?'border-red-400 ring-red-200':'border-slate-200 focus:ring-orange-300'}`
-      }),
-      passErr && /*#__PURE__*/React.createElement("p",{className:"text-xs text-red-500 mb-3"},"Senha incorreta."),
-      /*#__PURE__*/React.createElement("button",{onClick:tryAuth,className:"w-full bg-orange-500 text-white py-3 rounded-xl font-semibold text-sm mb-3"},"Entrar"),
-      /*#__PURE__*/React.createElement("button",{onClick:onBack,className:"w-full text-slate-500 text-sm py-2"},"Cancelar")
-    )
-  );
-
-  return /*#__PURE__*/React.createElement("div", {className:"min-h-screen bg-slate-50"},
-    /*#__PURE__*/React.createElement("div", {className:"bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10"},
-      /*#__PURE__*/React.createElement("button", {onClick:onBack, className:"text-slate-400 hover:text-slate-700 text-lg font-bold pr-2"}, "‹"),
-      /*#__PURE__*/React.createElement("span", {className:"font-semibold text-slate-800 text-sm"}, "Gerenciar Equipe")
-    ),
-    /*#__PURE__*/React.createElement("div", {className:"px-4 py-5 max-w-lg mx-auto pb-32"},
-      UNITS.map(u => /*#__PURE__*/React.createElement("div", {key:u.id, className:"bg-white rounded-2xl border border-slate-200 p-4 mb-4 shadow-sm"},
-        /*#__PURE__*/React.createElement("div", {className:"flex items-center gap-3 mb-3"},
-          /*#__PURE__*/React.createElement("div", {className:`w-9 h-9 rounded-xl ${u.color} flex items-center justify-center text-white font-bold text-sm`}, u.label[0]),
-          /*#__PURE__*/React.createElement("span", {className:"font-bold text-slate-800"}, u.label)
-        ),
-        (resp[u.id]||[]).length === 0 && /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-3 italic"},"Nenhum funcionário cadastrado"),
-        /*#__PURE__*/React.createElement("div", {className:"flex flex-col gap-1.5 mb-3"},
-          (resp[u.id]||[]).map((name,idx) => /*#__PURE__*/React.createElement("div", {
-            key:idx, className:"flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2"
-          },
-            /*#__PURE__*/React.createElement("span", {className:"text-sm text-slate-700"}, name),
-            /*#__PURE__*/React.createElement("button", {
-              onClick: () => removeName(u.id, idx),
-              className:"text-red-400 hover:text-red-600 text-xs font-medium px-2 py-0.5 hover:bg-red-50 rounded"
-            }, "Remover")
-          ))
-        ),
-        /*#__PURE__*/React.createElement("div", {className:"flex gap-2"},
-          /*#__PURE__*/React.createElement("input", {
-            type:"text",
-            placeholder:"Nome do funcionário",
-            value: newName[u.id]||'',
-            onChange: e => setNewName(nn=>({...nn,[u.id]:e.target.value})),
-            onKeyDown: e => e.key==='Enter' && addName(u.id),
-            className:"flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-          }),
-          /*#__PURE__*/React.createElement("button", {
-            onClick: () => addName(u.id),
-            className:"bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-semibold"
-          }, "+ Adicionar")
-        )
-      )),
-      /*#__PURE__*/React.createElement("button", {
-        onClick: save,
-        disabled: saving,
-        className:"fixed bottom-5 left-4 right-4 max-w-lg mx-auto bg-green-500 text-white py-4 rounded-2xl font-bold text-base shadow-lg disabled:opacity-60"
-      }, saving ? "Salvando..." : "✓ Salvar alterações")
-    )
-  );
-};
-
 function App() {
   const [stdReports, setStdReports] = React.useState([]);
   const [maneReports, setManeReports] = React.useState([]);
@@ -2334,12 +2238,7 @@ function App() {
   const [done, setDone] = React.useState(false);
   const [lastReport, setLastReport] = React.useState(null);
   const [showWA, setShowWA] = React.useState(false);
-  const [responsaveis, setResponsaveis] = React.useState({...RESPONSAVEIS});
-  const [showEquipe, setShowEquipe] = React.useState(false);
   React.useEffect(() => {
-    db.collection(COL_CONFIG).doc(RESP_DOC).get().then(doc => {
-      if(doc.exists) setResponsaveis({...RESPONSAVEIS, ...doc.data()});
-    }).catch(()=>{});
     const u1 = db.collection(COL_UNIDADES).onSnapshot(snap => {
       const d = snap.docs.map(d => ({
         id: d.id,
@@ -2388,17 +2287,6 @@ function App() {
     className: "spin w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full"
   }));
 
-  // Gerenciar equipe
-  if (showEquipe) return /*#__PURE__*/React.createElement(GerenciarEquipe, {
-    responsaveis: responsaveis,
-    onSave: async (newResp) => {
-      await db.collection(COL_CONFIG).doc(RESP_DOC).set(newResp);
-      setResponsaveis(newResp);
-      setShowEquipe(false);
-    },
-    onBack: () => setShowEquipe(false)
-  });
-
   // Unit selector
   if (!selUnit) return /*#__PURE__*/React.createElement("div", {
     className: "min-h-screen bg-slate-50 px-4 pt-12 pb-8"
@@ -2424,10 +2312,7 @@ function App() {
     className: "text-xl"
   }, "\uD83D\uDCCA"), /*#__PURE__*/React.createElement("span", {
     className: "font-bold text-base"
-  }, "Dashboard Geral")), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowEquipe(true),
-    className: "w-full flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-2xl p-4 hover:border-slate-400 hover:shadow-md transition-all text-slate-700 font-semibold mb-1"
-  }, /*#__PURE__*/React.createElement("span", {className:"text-lg"}, "👥"), "Gerenciar Equipe"), /*#__PURE__*/React.createElement("div", {
+  }, "Dashboard Geral")), /*#__PURE__*/React.createElement("div", {
     className: "space-y-3"
   }, UNITS.map(u => /*#__PURE__*/React.createElement("button", {
     key: u.id,
@@ -2478,7 +2363,6 @@ function App() {
   // Mané form
   if (selUnit.mane) return /*#__PURE__*/React.createElement(ManeForm, {
     onBack: () => setSelUnit(null),
-    responsaveis: responsaveis,
     onSubmit: async data => {
       if (!data) {
         setSelUnit(null);
@@ -2494,8 +2378,7 @@ function App() {
     unitLabel: selUnit.label,
     unitId: selUnit.id,
     onBack: () => setSelUnit(null),
-    onSubmit: handleSubmitStd,
-    responsaveis: responsaveis
+    onSubmit: handleSubmitStd
   });
 
   // History tab for standard units
