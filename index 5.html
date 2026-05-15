@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Relatório Operacional — Cantucci</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/recharts@2.10.4/umd/Recharts.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    [data-animate]{animation:fadeIn 0.2s ease}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .spin{animation:spin 1s linear infinite}
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+<div id="app-splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff;z-index:9999">
+  <div style="font-family:sans-serif;font-size:22px;font-weight:700;color:#f97316;margin-bottom:10px;">Cantucci</div>
+  <div style="font-family:sans-serif;font-size:14px;color:#999;letter-spacing:0.5px;">Carregando...</div>
+  <div style="margin-top:18px;width:32px;height:32px;border:3px solid #fed7aa;border-top-color:#f97316;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+</div>
+<div id="root"></div>
+<script type="text/babel">
+
+// ── Firebase ──────────────────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyB_EOO59ePTfIchITlXCMaNOUPGMy7P2j0",
+  authDomain: "quadro-cantucci.firebaseapp.com",
+  projectId: "quadro-cantucci",
+  storageBucket: "quadro-cantucci.firebasestorage.app",
+  messagingSenderId: "515265193107",
+  appId: "1:515265193107:web:50ad97157c3ee299f15966"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const COL_UNIDADES = 'unidades_reports';
+const COL_MANE     = 'mane_reports';
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const UNITS = [
+  { id:'asa-sul',      label:'Asa Sul',           color:'bg-orange-500', mane:false },
+  { id:'aguas-claras', label:'Águas Claras',       color:'bg-blue-500',   mane:false },
+  { id:'asa-norte',    label:'Asa Norte',          color:'bg-green-500',  mane:false },
+  { id:'superquadra',  label:'Superquadra Norte',  color:'bg-purple-500', mane:false },
+  { id:'koji',         label:'Koji',               color:'bg-rose-500',   mane:false },
+  { id:'mane',         label:'Mané',               color:'bg-amber-500',  mane:true  },
+];
+
+const RESPONSAVEIS = {
+  'asa-sul':      ['Danillo','Ricardo'],
+  'asa-norte':    ['João','Endson','Leonardo'],
+  'aguas-claras': ['Jefferson','Luiza'],
+  'superquadra':  ['Mateus','Vando','Thallison'],
+  'koji':         [],
+  'mane':         ['Victor','Rosyane','Jeane','Italo'],
+};
+
+const MOVIMENTOS    = ['Fraco','Médio','Forte','Fortíssimo'];
+const TURNOS_STD    = ['Manhã','Noite'];
+const TURNOS_MANE   = ['Dia','Noite'];
+const ERROS_PRATO   = ['Prato frio','Carne fora do ponto','Carne dura','Demora na entrega','Prato errado','Prato fora do padrão (qualidade)','Prato fora do padrão (quantidade)','Outro'];
+const CHECKLISTS_STD  = ['Cozinha Cantucci','Cozinha Grano/Inforno','Parrilla','Salão','Caixa','Bar','Asg','Gerente','Fechamento salão'];
+const CHECKLISTS_MANE = ['Abertura de Turno - Véi Chico','Abertura de Turno - SPQ (mané)','Fechamento - Véi Chico (mané)','Fechamento - SPQ (mané)'];
+
+// ── Clipboard helper ─────────────────────────────────────────────────────────
+const copyText = (text) => new Promise((resolve) => {
+  if(!text){resolve(false);return;}
+  const doExec = () => {
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      resolve(ok);
+    }catch(e){resolve(false);}
+  };
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(text).then(()=>resolve(true)).catch(doExec);
+  } else { doExec(); }
+});
+
+const getToday = () => {
+  const n = new Date();
+  if (n.getHours() < 5) n.setDate(n.getDate()-1);
+  return n.toISOString().split('T')[0];
+};
+const fmtDate = d => { if(!d)return'-'; const[y,m,day]=d.split('-'); return`${day}/${m}/${y}`; };
+
+// ── Shared UI ─────────────────────────────────────────────────────────────────
+const Toast = ({msg}) => msg ? (
+  <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white text-sm px-4 py-2 rounded-xl shadow-lg">{msg}</div>
+) : null;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// STANDARD FORM (6 blocos — todas as unidades exceto Mané)
+// ══════════════════════════════════════════════════════════════════════════════
+const YesNo = ({value,onChange}) => (
+  <div className="flex gap-2">
+    {[true,false].map((v,i)=>(
+      <button key={i} onClick={()=>onChange(v)}
+        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all border
+          ${value===v?(v?'bg-green-500 text-white border-green-500':'bg-red-400 text-white border-red-400')
+            :'bg-white text-slate-600 border-slate-200 hover:border-slate-400'}`}>
+        {i===0?'Sim':'Não'}
+      </button>
+    ))}
+  </div>
+);
+
+const SField = ({label,required,sub,children}) => (
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-slate-700 mb-1">
+      {label}{required&&<span className="text-red-400 ml-1">*</span>}
+      {sub&&<span className="text-xs text-slate-400 ml-2">{sub}</span>}
+    </label>
+    {children}
+  </div>
+);
+
+const SInput = (p) => <input {...p} className={`w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 ${p.className||''}`}/>;
+const STextarea = (p) => <textarea {...p} rows={p.rows||3} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"/>;
+const SSelect = ({value,onChange,options,placeholder}) => (
+  <select value={value} onChange={e=>onChange(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 bg-white">
+    {placeholder&&<option value="">{placeholder}</option>}
+    {options.map(o=><option key={o} value={o}>{o}</option>)}
+  </select>
+);
+
+const CBox = ({show,children}) => show?(
+  <div data-animate className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg space-y-3">{children}</div>
+):null;
+
+const SProgressBar = ({step,total}) => (
+  <div className="w-full bg-slate-200 rounded-full h-1 mb-4">
+    <div className="bg-orange-500 h-1 rounded-full transition-all duration-300" style={{width:`${(step/total)*100}%`}}/>
+  </div>
+);
+
+const SStepHeader = ({step,total,title,subtitle}) => (
+  <div className="mb-5">
+    <span className="text-xs font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">{step}/{total}</span>
+    <h2 className="text-lg font-bold text-slate-800 mt-1">{title}</h2>
+    {subtitle&&<p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+  </div>
+);
+
+const STD_TOTAL = 6;
+const STD_EMPTY = {
+  date:getToday(), unit:'', shift:'', responsible:'', movimento:'',
+  tma:'', pctAcima20:'', temAtraso:null, atrasoDesc:'', atrasoProcesso:'', atrasoResponsavel:'', atrasoJustificativa:'', atrasoPlano:'',
+  temReclamacaoDemora:null, demoraDesc:'', demoraFeito:'',
+  temErroQualidade:null, erroQualidadeDesc:'', erroMesa:'', erroFeito:'', erroCompensacao:null, erroCompensacaoDesc:'',
+  temReclamacaoAtendimento:null, reclamacaoAtendimentoDesc:'', solucaoAtendimento:'',
+  temReclamacaoRuptura:null, rupturaSalaoDesc:'', solucaoRuptura:'',
+  temDificuldadeExplicacao:null, dificuldadeDesc:'',
+  visitaMesaQtd:'',
+  deliveryAtraso:null, deliveryAtrasoDesc:'',
+  deliveryErroDespacho:null, deliveryErroDesc:'',
+  deliveryReclamacaoQualidade:null, deliveryQualidadeDesc:'',
+  deliveryProdutoFalta:null, deliveryFaltaDesc:'',
+  deliveryCortesia:null, deliveryCortesiaDesc:'',
+  checklistsOk:null, checklistsDesc:[], checklistsResponsavel:'', checklistsJustificativa:'', checklistsPlano:'',
+  faltaAtraso:null, faltaAtrasoDesc:'',
+  problemaSistema:null, sistemaDesc:'',
+  equipamentoQuebrado:null, equipamentoDesc:'', equipamentoAcao:'', equipamentoPrazo:'',
+  principalBO:'', principalAcerto:'', atencaoProximo:'', notaTurno:'',
+};
+
+const stdValid = (step,f) => {
+  switch(step){
+    case 1: return f.date&&f.shift&&f.responsible&&f.movimento;
+    case 2:
+      if(f.tma===''||f.pctAcima20==='')return false;
+      if(Number(f.pctAcima20)>20&&(!f.atrasoDesc||!f.atrasoProcesso||!f.atrasoResponsavel||!f.atrasoJustificativa||!f.atrasoPlano))return false;
+      if(f.temAtraso===true&&(!f.atrasoDesc||!f.atrasoProcesso||!f.atrasoResponsavel||!f.atrasoJustificativa||!f.atrasoPlano))return false;
+      if(Number(f.pctAcima20)<=20&&f.temAtraso===null)return false;
+      if(f.temReclamacaoDemora===null)return false;
+      if(f.temReclamacaoDemora&&(!f.demoraDesc||!f.demoraFeito))return false;
+      if(f.temErroQualidade===null)return false;
+      if(f.temErroQualidade&&(!f.erroQualidadeDesc||!f.erroFeito||f.erroCompensacao===null))return false;
+      return true;
+    case 3:
+      if([f.temReclamacaoAtendimento,f.temReclamacaoRuptura,f.temDificuldadeExplicacao].some(v=>v===null))return false;
+      if(!f.visitaMesaQtd)return false;
+      if(f.temReclamacaoAtendimento&&(!f.reclamacaoAtendimentoDesc||!f.solucaoAtendimento))return false;
+      if(f.temReclamacaoRuptura&&(!f.rupturaSalaoDesc||!f.solucaoRuptura))return false;
+      if(f.temDificuldadeExplicacao&&!f.dificuldadeDesc)return false;
+      return true;
+    case 4:
+      if([f.deliveryAtraso,f.deliveryErroDespacho,f.deliveryReclamacaoQualidade,f.deliveryProdutoFalta,f.deliveryCortesia].some(v=>v===null))return false;
+      return true;
+    case 5:
+      if([f.checklistsOk,f.faltaAtraso,f.problemaSistema,f.equipamentoQuebrado].some(v=>v===null))return false;
+      if(f.checklistsOk===false&&(!f.checklistsDesc||f.checklistsDesc.length===0))return false;
+      if(f.checklistsOk===false&&(!f.checklistsResponsavel||!f.checklistsJustificativa||!f.checklistsPlano))return false;
+      if(f.equipamentoQuebrado&&(!f.equipamentoDesc||!f.equipamentoAcao||!f.equipamentoPrazo))return false;
+      return true;
+    case 6: return f.principalBO&&f.principalAcerto&&f.atencaoProximo&&f.notaTurno!=='';
+    default: return true;
+  }
+};
+
+const StdForm = ({unitLabel,unitId,onSubmit,onBack}) => {
+  const [f,setF]       = React.useState({...STD_EMPTY,unit:unitId});
+  const [step,setStep] = React.useState(1);
+  const [busy,setBusy] = React.useState(false);
+  const [toast,setTst] = React.useState('');
+
+  React.useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setTst(''),3000);return()=>clearTimeout(t);},[toast]);
+
+  const set = (k,v) => setF(p=>({...p,[k]:v}));
+
+  const next = () => {
+    if(!stdValid(step,f)){setTst('Preencha todos os campos obrigatórios');return;}
+    setStep(s=>Math.min(s+1,STD_TOTAL)); window.scrollTo(0,0);
+  };
+  const back = () => { setStep(s=>Math.max(s-1,1)); window.scrollTo(0,0); };
+
+  const submit = async () => {
+    if(!stdValid(step,f))return;
+    setBusy(true);
+    try { await onSubmit(f); }
+    catch(e){ setTst('Erro ao salvar. Tente novamente.'); }
+    finally{ setBusy(false); }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <Toast msg={toast}/>
+      <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+        <button onClick={onBack} className="text-slate-400 hover:text-slate-700 text-lg font-bold pr-2">‹</button>
+        <span className="font-semibold text-slate-800 text-sm">{unitLabel}</span>
+      </div>
+      <div className="px-4 pt-4 pb-32">
+        <SProgressBar step={step} total={STD_TOTAL}/>
+
+        {step===1&&(<div data-animate>
+          <SStepHeader step={1} total={STD_TOTAL} title="Identificação" subtitle="Dados do turno"/>
+          <SField label="Unidade"><SInput value={unitLabel} readOnly className="bg-slate-50 text-slate-500"/></SField>
+          <SField label="Data" required><SInput type="date" value={f.date} onChange={e=>set('date',e.target.value)}/></SField>
+          <SField label="Turno" required><SSelect value={f.shift} onChange={v=>set('shift',v)} options={TURNOS_STD} placeholder="Selecione o turno"/></SField>
+          <SField label="Responsável" required>
+            {RESPONSAVEIS[unitId]&&RESPONSAVEIS[unitId].length>0
+              ?<SSelect value={f.responsible} onChange={v=>set('responsible',v)} options={RESPONSAVEIS[unitId]} placeholder="Selecione"/>
+              :<SInput value={f.responsible} onChange={e=>set('responsible',e.target.value)} placeholder="Nome do responsável"/>}
+          </SField>
+          <SField label="Movimento do turno" required>
+            <div className="grid grid-cols-2 gap-2">
+              {MOVIMENTOS.map(m=>(
+                <button key={m} onClick={()=>set('movimento',m)}
+                  className={`py-2 rounded-lg text-sm font-medium border transition-all ${f.movimento===m?'bg-orange-500 text-white border-orange-500':'bg-white text-slate-600 border-slate-200 hover:border-slate-400'}`}>{m}</button>
+              ))}
+            </div>
+          </SField>
+        </div>)}
+
+        {step===2&&(<div data-animate>
+          <SStepHeader step={2} total={STD_TOTAL} title="TMA e Cozinha" subtitle="Tempo médio de atendimento e qualidade"/>
+          <SField label="TMA do turno (min)" required><SInput type="number" value={f.tma} onChange={e=>set('tma',e.target.value)} placeholder="Ex: 18"/></SField>
+          <SField label="% pedidos acima de 20 min" required><SInput type="number" value={f.pctAcima20} onChange={e=>set('pctAcima20',e.target.value)} placeholder="Ex: 12"/></SField>
+          {Number(f.pctAcima20)<=20&&(<SField label="Houve atraso relevante?" required><YesNo value={f.temAtraso} onChange={v=>set('temAtraso',v)}/></SField>)}
+          <CBox show={f.temAtraso===true||Number(f.pctAcima20)>20}>
+            {Number(f.pctAcima20)>20&&<p className="text-xs text-orange-600 font-medium mb-2">⚠️ {f.pctAcima20}% acima de 20 min — justificativa obrigatória</p>}
+            <SField label="1. Descreva o atraso"><STextarea value={f.atrasoDesc} onChange={e=>set('atrasoDesc',e.target.value)} placeholder="O que causou o atraso?" rows={2}/></SField>
+            <SField label="2. Qual processo falhou?"><STextarea value={f.atrasoProcesso} onChange={e=>set('atrasoProcesso',e.target.value)} placeholder="Descreva o processo que deveria ter sido seguido..." rows={2}/></SField>
+            <SField label="3. Quem deveria ter realizado?"><SInput value={f.atrasoResponsavel} onChange={e=>set('atrasoResponsavel',e.target.value)} placeholder="Nome ou cargo responsável"/></SField>
+            <SField label="4. Qual a justificativa de não ter realizado?"><STextarea value={f.atrasoJustificativa} onChange={e=>set('atrasoJustificativa',e.target.value)} placeholder="Por que não foi realizado?" rows={2}/></SField>
+            <SField label="5. Plano de ação"><STextarea value={f.atrasoPlano} onChange={e=>set('atrasoPlano',e.target.value)} placeholder="O que será feito para evitar a recorrência?" rows={2}/></SField>
+          </CBox>
+          <SField label="Houve reclamação de demora?" required><YesNo value={f.temReclamacaoDemora} onChange={v=>set('temReclamacaoDemora',v)}/></SField>
+          <CBox show={f.temReclamacaoDemora===true}>
+            <SField label="Descreva a reclamação"><STextarea value={f.demoraDesc} onChange={e=>set('demoraDesc',e.target.value)} placeholder="Qual foi a reclamação?" rows={2}/></SField>
+            <SField label="O que foi feito?"><STextarea value={f.demoraFeito} onChange={e=>set('demoraFeito',e.target.value)} placeholder="Ação tomada" rows={2}/></SField>
+          </CBox>
+          <SField label="Houve erro de qualidade?" sub="(cru, queimado, montagem, etc)" required><YesNo value={f.temErroQualidade} onChange={v=>set('temErroQualidade',v)}/></SField>
+          <CBox show={f.temErroQualidade===true}>
+            <SField label="Qual foi o erro?"><STextarea value={f.erroQualidadeDesc} onChange={e=>set('erroQualidadeDesc',e.target.value)} rows={2}/></SField>
+            <SField label="Mesa / pedido"><SInput value={f.erroMesa} onChange={e=>set('erroMesa',e.target.value)} placeholder="Ex: Mesa 12"/></SField>
+            <SField label="O que foi feito?"><STextarea value={f.erroFeito} onChange={e=>set('erroFeito',e.target.value)} rows={2}/></SField>
+            <SField label="Houve compensação?"><YesNo value={f.erroCompensacao} onChange={v=>set('erroCompensacao',v)}/></SField>
+            {f.erroCompensacao===true&&<SField label="Qual compensação?"><STextarea value={f.erroCompensacaoDesc} onChange={e=>set('erroCompensacaoDesc',e.target.value)} placeholder="Ex: cortesia, desconto..." rows={2}/></SField>}
+          </CBox>
+        </div>)}
+
+        {step===3&&(<div data-animate>
+          <SStepHeader step={3} total={STD_TOTAL} title="Salão e Experiência" subtitle="Atendimento e cliente"/>
+          <SField label="Houve reclamação de atendimento?" required><YesNo value={f.temReclamacaoAtendimento} onChange={v=>set('temReclamacaoAtendimento',v)}/></SField>
+          <CBox show={f.temReclamacaoAtendimento===true}>
+            <SField label="Descreva"><STextarea value={f.reclamacaoAtendimentoDesc} onChange={e=>set('reclamacaoAtendimentoDesc',e.target.value)} rows={2}/></SField>
+            <SField label="Solução aplicada"><STextarea value={f.solucaoAtendimento} onChange={e=>set('solucaoAtendimento',e.target.value)} rows={2}/></SField>
+          </CBox>
+          <SField label="Houve reclamação por ruptura?" required><YesNo value={f.temReclamacaoRuptura} onChange={v=>set('temReclamacaoRuptura',v)}/></SField>
+          <CBox show={f.temReclamacaoRuptura===true}>
+            <SField label="O que faltou?"><SInput value={f.rupturaSalaoDesc} onChange={e=>set('rupturaSalaoDesc',e.target.value)} placeholder="Ex: Cerveja X"/></SField>
+            <SField label="Solução aplicada"><STextarea value={f.solucaoRuptura} onChange={e=>set('solucaoRuptura',e.target.value)} rows={2}/></SField>
+          </CBox>
+          <SField label="Houve dificuldade da equipe em explicar produto?" required><YesNo value={f.temDificuldadeExplicacao} onChange={v=>set('temDificuldadeExplicacao',v)}/></SField>
+          <CBox show={f.temDificuldadeExplicacao===true}>
+            <SField label="Qual dificuldade?"><STextarea value={f.dificuldadeDesc} onChange={e=>set('dificuldadeDesc',e.target.value)} rows={2}/></SField>
+          </CBox>
+          <SField label="Quantas visitas de mesa foram realizadas?" required><SInput type="number" value={f.visitaMesaQtd} onChange={e=>set('visitaMesaQtd',e.target.value)} placeholder="Ex: 8"/></SField>
+        </div>)}
+
+        {step===4&&(<div data-animate>
+          <SStepHeader step={4} total={STD_TOTAL} title="Delivery / iFood" subtitle="Operação de entrega"/>
+          <SField label="Houve atraso?" required><YesNo value={f.deliveryAtraso} onChange={v=>set('deliveryAtraso',v)}/></SField>
+          <CBox show={f.deliveryAtraso===true}><SField label="Descreva"><STextarea value={f.deliveryAtrasoDesc} onChange={e=>set('deliveryAtrasoDesc',e.target.value)} rows={2}/></SField></CBox>
+          <SField label="Houve erro de despacho?" required><YesNo value={f.deliveryErroDespacho} onChange={v=>set('deliveryErroDespacho',v)}/></SField>
+          <CBox show={f.deliveryErroDespacho===true}><SField label="Descreva"><STextarea value={f.deliveryErroDesc} onChange={e=>set('deliveryErroDesc',e.target.value)} rows={2}/></SField></CBox>
+          <SField label="Houve reclamação de qualidade?" required><YesNo value={f.deliveryReclamacaoQualidade} onChange={v=>set('deliveryReclamacaoQualidade',v)}/></SField>
+          <CBox show={f.deliveryReclamacaoQualidade===true}><SField label="Descreva"><STextarea value={f.deliveryQualidadeDesc} onChange={e=>set('deliveryQualidadeDesc',e.target.value)} rows={2}/></SField></CBox>
+          <SField label="Houve produto em falta?" required><YesNo value={f.deliveryProdutoFalta} onChange={v=>set('deliveryProdutoFalta',v)}/></SField>
+          <CBox show={f.deliveryProdutoFalta===true}><SField label="Quais produtos?"><SInput value={f.deliveryFaltaDesc} onChange={e=>set('deliveryFaltaDesc',e.target.value)} placeholder="Ex: X Burguer"/></SField></CBox>
+          <SField label="Houve necessidade de cortesia?" required><YesNo value={f.deliveryCortesia} onChange={v=>set('deliveryCortesia',v)}/></SField>
+          <CBox show={f.deliveryCortesia===true}><SField label="Qual compensação?"><STextarea value={f.deliveryCortesiaDesc} onChange={e=>set('deliveryCortesiaDesc',e.target.value)} rows={2}/></SField></CBox>
+        </div>)}
+
+        {step===5&&(<div data-animate>
+          <SStepHeader step={5} total={STD_TOTAL} title="Operação" subtitle="Checklists e infraestrutura"/>
+          <SField label="Todos os checklists foram realizados?" required><YesNo value={f.checklistsOk} onChange={v=>set('checklistsOk',v)}/></SField>
+          <CBox show={f.checklistsOk===false}>
+            <SField label="Quais não foram realizados?" required><STextarea value={f.checklistsDesc} onChange={e=>set('checklistsDesc',e.target.value)} placeholder="Descreva quais checklists não foram realizados" rows={2}/></SField>
+            <SField label="Quem era o responsável?"><SInput value={f.checklistsResponsavel} onChange={e=>set('checklistsResponsavel',e.target.value)} placeholder="Nome ou cargo responsável"/></SField>
+            <SField label="Qual a justificativa de não ter realizado?"><STextarea value={f.checklistsJustificativa} onChange={e=>set('checklistsJustificativa',e.target.value)} placeholder="Por que não foi realizado?" rows={2}/></SField>
+            <SField label="Plano de ação"><STextarea value={f.checklistsPlano} onChange={e=>set('checklistsPlano',e.target.value)} placeholder="O que será feito para evitar a recorrência?" rows={2}/></SField>
+          </CBox>
+          <SField label="Houve falta ou atraso de equipe?" required><YesNo value={f.faltaAtraso} onChange={v=>set('faltaAtraso',v)}/></SField>
+          <CBox show={f.faltaAtraso===true}><SField label="Descreva"><STextarea value={f.faltaAtrasoDesc} onChange={e=>set('faltaAtrasoDesc',e.target.value)} rows={2}/></SField></CBox>
+          <SField label="Houve problema de sistema?" required><YesNo value={f.problemaSistema} onChange={v=>set('problemaSistema',v)}/></SField>
+          <CBox show={f.problemaSistema===true}><SField label="Descreva"><STextarea value={f.sistemaDesc} onChange={e=>set('sistemaDesc',e.target.value)} rows={2}/></SField></CBox>
+          <SField label="Houve equipamento quebrado / com defeito?" required><YesNo value={f.equipamentoQuebrado} onChange={v=>set('equipamentoQuebrado',v)}/></SField>
+          <CBox show={f.equipamentoQuebrado===true}>
+            <SField label="Qual equipamento?"><SInput value={f.equipamentoDesc} onChange={e=>set('equipamentoDesc',e.target.value)} placeholder="Ex: Fritadeira 2"/></SField>
+            <SField label="Ação tomada"><STextarea value={f.equipamentoAcao} onChange={e=>set('equipamentoAcao',e.target.value)} rows={2}/></SField>
+            <SField label="Prazo de solução"><SInput type="date" value={f.equipamentoPrazo} onChange={e=>set('equipamentoPrazo',e.target.value)}/></SField>
+          </CBox>
+        </div>)}
+
+        {step===6&&(<div data-animate>
+          <SStepHeader step={6} total={STD_TOTAL} title="Gestão do Turno" subtitle="Avaliação e encaminhamentos"/>
+          <SField label="Principal BO do turno" required><STextarea value={f.principalBO} onChange={e=>set('principalBO',e.target.value)} placeholder="O maior problema do turno"/></SField>
+          <SField label="Principal acerto do turno" required><STextarea value={f.principalAcerto} onChange={e=>set('principalAcerto',e.target.value)} placeholder="O que funcionou bem"/></SField>
+          <SField label="O que precisa de atenção no próximo turno?" required><STextarea value={f.atencaoProximo} onChange={e=>set('atencaoProximo',e.target.value)} placeholder="Alertas para quem assumir"/></SField>
+          <SField label={`Nota do turno: ${f.notaTurno!==''?f.notaTurno:'—'}`} required>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-slate-400">0</span>
+              <input type="range" min="0" max="10" step="1" value={f.notaTurno||0} onChange={e=>set('notaTurno',e.target.value)} className="flex-1 accent-orange-500"/>
+              <span className="text-xs text-slate-400">10</span>
+            </div>
+            <div className="flex justify-between mt-1">
+              {[0,1,2,3,4,5,6,7,8,9,10].map(n=>(
+                <span key={n} className={`text-xs ${Number(f.notaTurno)===n?'text-orange-500 font-bold':'text-slate-300'}`}>{n}</span>
+              ))}
+            </div>
+          </SField>
+        </div>)}
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3 flex gap-3">
+        {step>1&&<button onClick={back} className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm">Voltar</button>}
+        {step<STD_TOTAL
+          ?<button onClick={next} className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${stdValid(step,f)?'bg-orange-500 text-white':'bg-slate-200 text-slate-400'}`}>Próximo</button>
+          :<button onClick={submit} disabled={busy||!stdValid(step,f)} className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${!busy&&stdValid(step,f)?'bg-green-500 text-white':'bg-slate-200 text-slate-400'}`}>{busy?'Enviando...':'Enviar relatório'}</button>
+        }
+      </div>
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MANÉ FORM (9 passos — original)
+// ══════════════════════════════════════════════════════════════════════════════
+const Ico = ({d,size=20,className='',strokeWidth=2})=>(
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
+    {d.map((p,i)=>typeof p==='string'?<path key={i} d={p}/>:p.circle?<circle key={i} cx={p.circle[0]} cy={p.circle[1]} r={p.circle[2]}/>:<polyline key={i} points={p.points}/>)}
+  </svg>
+);
+const MI={
+  ClipboardList:(p)=><Ico {...p} d={["M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2","M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z","M9 12h6","M9 16h4"]}/>,
+  CheckCircle2:(p)=><Ico {...p} d={["M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z","M9 12l2 2 4-4"]}/>,
+  AlertCircle:(p)=><Ico {...p} d={["M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z","M12 8v4","M12 16h.01"]}/>,
+  PlusCircle:(p)=><Ico {...p} d={["M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z","M12 8v8","M8 12h8"]}/>,
+  Trash2:(p)=><Ico {...p} d={["M3 6h18","M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2","M10 11v6","M14 11v6"]}/>,
+  X:(p)=><Ico {...p} d={["M18 6 6 18","M6 6l12 12"]}/>,
+  ChevronLeft:(p)=><Ico {...p} d={["M15 18l-6-6 6-6"]}/>,
+  ChevronRight:(p)=><Ico {...p} d={["M9 18l6-6-6-6"]}/>,
+  Copy:(p)=><Ico {...p} d={["M8 4v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7.242a2 2 0 0 0-.602-1.43L16.083 2.57A2 2 0 0 0 14.685 2H10a2 2 0 0 0-2 2z","M16 18v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2"]}/>,
+};
+
+const MANE_EMPTY = {
+  reportDate:getToday(), unit:'Mané', manager:'', shift:'',
+  hadFoodErrors:null, foodErrors:[], otherFoodError:'', foodErrorSolutions:'',
+  tmaAverage:'', tmaAbove15:'', tmaBottleneck:'',
+  perfProcess:'', perfExecution:'', perfRite:'', perfFiscalization:'', perfDeadline:'',
+  cancelationsCount:'', cancelationsReasons:'', hadStockOuts:null,
+  stockOutList:[{item:'',quantity:'',measureUnit:'un'}],
+  stockOutPerfProcess:'', stockOutPerfExecution:'', stockOutPerfRite:'', stockOutPerfFiscalization:'', stockOutPerfDeadline:'',
+  hadCustomerComplaints:null, customerComplaints:'', waiterReports:'',
+  wasteChecked:null, hadWaste:null, wasteList:[{item:'',quantity:'',measureUnit:'un'}], wasteNotes:'',
+  checklistsDone:null, boardsDone:null, preShiftDone:null, maturityReason:'', preShiftNotes:'',
+  sysIssues:null, sysIssueDesc:'', sysSolutionDeadline:'',
+  equipIssues:null, equipIssueDesc:'', equipSolutionDeadline:'',
+  hadDeviations:null, deviationsList:[{item:'',quantity:'',measureUnit:'un'}],
+  deviationJustification:'', deviationAction:''
+};
+
+const maneValid = (step,f) => {
+  switch(step){
+    case 1: return f.reportDate&&f.unit&&f.manager&&f.shift;
+    case 2:
+      if(f.hadFoodErrors===null)return false;
+      if(f.hadFoodErrors){if(!f.foodErrors.length)return false;if(f.foodErrors.includes('Outro')&&!f.otherFoodError)return false;if(!f.foodErrorSolutions)return false;}
+      return true;
+    case 3:{const need=Number(f.tmaAverage)>15||Number(f.tmaAbove15)>15;if(f.tmaAverage===''||f.tmaAbove15==='')return false;if(need&&(!f.tmaBottleneck||!f.perfProcess||!f.perfExecution||!f.perfRite||!f.perfFiscalization||!f.perfDeadline))return false;return true;}
+    case 4: if(f.cancelationsCount===''||f.hadStockOuts===null)return false;if(Number(f.cancelationsCount)>0&&!f.cancelationsReasons)return false;if(f.hadStockOuts){if(f.stockOutList.some(s=>!s.item||!s.quantity))return false;if(!f.stockOutPerfProcess||!f.stockOutPerfExecution||!f.stockOutPerfRite||!f.stockOutPerfFiscalization||!f.stockOutPerfDeadline)return false;}return true;
+    case 5: if(f.hadCustomerComplaints===null||!f.waiterReports)return false;if(f.hadCustomerComplaints&&!f.customerComplaints)return false;return true;
+    case 6: if(f.wasteChecked===null||f.hadWaste===null)return false;if(f.wasteChecked===false&&!f.wasteNotes)return false;if(f.hadWaste&&f.wasteList.some(w=>!w.item||!w.quantity))return false;return true;
+    case 7: if(f.checklistsDone===null||f.boardsDone===null||f.preShiftDone===null)return false;if((!f.checklistsDone||!f.boardsDone||!f.preShiftDone)&&!f.maturityReason)return false;if(f.preShiftDone&&!f.preShiftNotes)return false;return true;
+    case 8: if(f.sysIssues===null||f.equipIssues===null)return false;if(f.sysIssues&&(!f.sysIssueDesc||!f.sysSolutionDeadline))return false;if(f.equipIssues&&(!f.equipIssueDesc||!f.equipSolutionDeadline))return false;return true;
+    case 9: if(f.hadDeviations===null)return false;if(f.hadDeviations){if(!f.deviationJustification||!f.deviationAction)return false;if(f.deviationsList.some(d=>!d.item||!d.quantity))return false;}return true;
+    default: return true;
+  }
+};
+
+// ── Mané sub-components (defined OUTSIDE ManeForm to avoid remount on re-render)
+const MInput=({label,value,onChange,type='text',placeholder=''})=>(
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+    {type==='textarea'
+      ?<textarea className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none" rows="3" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}/>
+      :<input type={type} className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} min={type==='number'?'0':undefined}/>
+    }
+  </div>
+);
+const MBool=({label,value,onChange})=>(
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-slate-700 mb-2">{label}</label>
+    <div className="flex gap-2">
+      {[{l:'Sim',v:true},{l:'Não',v:false}].map(o=>(
+        <button key={o.l} onClick={()=>onChange(o.v)} className={`flex-1 py-3 rounded-lg border text-sm font-medium transition-all ${value===o.v?(o.v?'bg-amber-500 text-white border-amber-500':'bg-red-400 text-white border-red-400'):'bg-white text-slate-700 border-slate-300'}`}>{o.l}</button>
+      ))}
+    </div>
+  </div>
+);
+const MRadio=({label,value,onChange,options})=>(
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-slate-700 mb-2">{label}</label>
+    <div className="flex flex-wrap gap-2">
+      {options.map(o=>(
+        <button key={o.val} onClick={()=>onChange(o.val)} className={`flex-1 min-w-[90px] py-3 px-3 rounded-lg border text-sm font-medium transition-all ${value===o.val?'bg-amber-500 text-white border-amber-500':'bg-white text-slate-700 border-slate-300'}`}>{o.label}</button>
+      ))}
+    </div>
+  </div>
+);
+const ListRow=({item,onItemChange,onRemove,showRemove})=>(
+  <div className="flex gap-2 mb-3 items-start">
+    <input type="text" placeholder="Item" className="flex-1 p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500" value={item.item} onChange={e=>onItemChange('item',e.target.value)}/>
+    <div className="w-[130px] flex gap-1">
+      <input type="number" placeholder="Qtd" className="w-1/2 p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500 px-2" value={item.quantity} onChange={e=>onItemChange('quantity',e.target.value)}/>
+      <select className="w-1/2 p-2.5 border border-slate-300 rounded-lg text-sm outline-none bg-white px-1" value={item.measureUnit} onChange={e=>onItemChange('measureUnit',e.target.value)}>
+        <option>kg</option><option>g</option><option>L</option><option>ml</option><option>un</option>
+      </select>
+    </div>
+    {showRemove&&<button onClick={onRemove} className="p-2.5 text-slate-400 hover:text-red-500 rounded-lg"><MI.Trash2 size={18}/></button>}
+  </div>
+);
+
+const ManeForm = ({onSubmit,onBack}) => {
+  const [f,setF]         = React.useState({...MANE_EMPTY});
+  const [step,setStep]   = React.useState(1);
+  const [busy,setBusy]   = React.useState(false);
+  const [summary,setSummary] = React.useState(false);
+  const [toast,setTst]   = React.useState('');
+
+  React.useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setTst(''),3000);return()=>clearTimeout(t);},[toast]);
+
+  const set = (k,v)=>setF(p=>({...p,[k]:v}));
+  const toggleCheck=(arr,val)=>setF(p=>{const c=p[arr];return{...p,[arr]:c.includes(val)?c.filter(x=>x!==val):[...c,val]};});
+  const listChange=(lf,idx,k,v)=>setF(p=>{const nl=[...p[lf]];nl[idx]={...nl[idx],[k]:v};return{...p,[lf]:nl};});
+  const listAdd=lf=>setF(p=>({...p,[lf]:[...p[lf],{item:'',quantity:'',measureUnit:'un'}]}));
+  const listRemove=(lf,idx)=>setF(p=>{const nl=p[lf].filter((_,i)=>i!==idx);return{...p,[lf]:nl.length?nl:[{item:'',quantity:'',measureUnit:'un'}]};});
+
+  const PerfBlock=({prefix})=>(
+    <div className="mt-4 border-t pt-4">
+      <p className="text-sm font-bold text-slate-700 mb-3 flex items-center"><MI.CheckCircle2 size={16} className="mr-2 text-amber-500"/> Ação Corretiva (PERF)</p>
+      <MInput label="P — Processo" value={f[`${prefix}Process`]} onChange={v=>set(`${prefix}Process`,v)} type="textarea" placeholder="Existe algum processo que evitaria esse erro?"/>
+      <MInput label="E — Execução" value={f[`${prefix}Execution`]} onChange={v=>set(`${prefix}Execution`,v)} type="textarea" placeholder="Esse processo foi realizado neste turno?"/>
+      <MInput label="R — Rito" value={f[`${prefix}Rite`]} onChange={v=>set(`${prefix}Rite`,v)} type="textarea" placeholder="Foi realizado no momento correto?"/>
+      <MInput label="F — Fiscalização" value={f[`${prefix}Fiscalization`]} onChange={v=>set(`${prefix}Fiscalization`,v)} type="textarea" placeholder="Identifique possíveis falhas de execução"/>
+      <MInput label="Prazo para Ação" value={f[`${prefix}Deadline`]} onChange={v=>set(`${prefix}Deadline`,v)} type="date"/>
+    </div>
+  );
+
+  const TITLES=['','1. Dados Iniciais','2. Registro da Operação','3. TMA','4. Cancelamentos e Rupturas','5. Clientes','6. Desperdícios','7. Maturidade Operacional','8. Infraestrutura','9. Desvios 1:1'];
+
+  const genSummary=()=>{
+    const[y,m,d2]=f.reportDate.split('-');
+    let s=`📊 *Relatório Operacional — Mané*\n📅 *Data:* ${d2}/${m}/${y}\n👤 *Gestor:* ${f.manager} | 🕒 *Turno:* ${f.shift}\n\n`;
+    s+=`⏱️ *TMA:* ${f.tmaAverage} min (${f.tmaAbove15}% acima de 15min)\n`;
+    const alerts=[];
+    if(f.hadFoodErrors){alerts.push(`🚨 Erros de Prato: ${f.foodErrors.join(', ')}`);if(f.foodErrorSolutions)alerts.push(`  ↳ Solução: ${f.foodErrorSolutions}`);}
+    if(Number(f.cancelationsCount)>0){alerts.push(`🗑️ Cancelamentos: ${f.cancelationsCount}`);if(f.cancelationsReasons)alerts.push(`  ↳ ${f.cancelationsReasons}`);}
+    if(f.hadStockOuts){alerts.push(`📉 Rupturas: Sim`);f.stockOutList.forEach(x=>alerts.push(`    - ${x.item}: ${x.quantity} ${x.measureUnit||'un'}`));}
+    if(f.hadCustomerComplaints){alerts.push(`🗣️ Reclamações: Sim`);if(f.customerComplaints)alerts.push(`  ↳ ${f.customerComplaints}`);}
+    if(f.sysIssues)alerts.push(`💻 Sistema: ${f.sysIssueDesc}`);
+    if(f.equipIssues)alerts.push(`🔧 Equipamento: ${f.equipIssueDesc}`);
+    s+=alerts.length?alerts.join('\n')+'\n\n':'✅ Operação sem grandes intercorrências.\n\n';
+    if(f.waiterReports)s+=`📝 Relato Salão:\n${f.waiterReports}\n`;
+    s+='\n_Relatório gerado via App_';
+    return s;
+  };
+
+  const [maneCopied,setManeCopied] = React.useState(false);
+  const copy=()=>{
+    copyText(genSummary()).then(ok=>{
+      if(ok){ setManeCopied(true); setTimeout(()=>{ setSummary(false); onSubmit(null); },1500); }
+      else { alert('Não foi possível copiar automaticamente.\n\nSelecione o texto manualmente e copie.'); }
+    });
+  };
+
+  const submit=async()=>{
+    if(!maneValid(step,f))return;
+    setBusy(true);
+    try{await onSubmit(f);setSummary(true);}
+    catch(e){setTst('Erro ao salvar.');}
+    finally{setBusy(false);}
+  };
+
+  return(
+    <div className="min-h-screen bg-slate-50">
+      <Toast msg={toast}/>
+      <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+        <button onClick={onBack} className="text-slate-400 hover:text-slate-700 text-lg font-bold pr-2">‹</button>
+        <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center text-white text-xs font-bold">M</div>
+        <span className="font-semibold text-slate-800 text-sm">Mané</span>
+      </div>
+
+      <div className="max-w-2xl mx-auto p-4 pb-32">
+        {/* Step dots */}
+        <div className="flex justify-between items-center mb-4 overflow-x-auto pb-1">
+          {[1,2,3,4,5,6,7,8,9].map(s=>(
+            <div key={s} className="flex flex-col items-center min-w-[28px]">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${s===step?'bg-amber-500 text-white':s<step?'bg-amber-100 text-amber-600':'bg-slate-100 text-slate-400'}`}>
+                {s<step?<MI.CheckCircle2 size={14}/>:s}
+              </div>
+            </div>
+          ))}
+        </div>
+        <h2 className="text-lg font-bold text-slate-800 mb-4 pb-2 border-b">{TITLES[step]}</h2>
+
+        <div data-animate key={step}>
+          {step===1&&<div>
+            <MInput label="Data do Relatório" value={f.reportDate} onChange={v=>set('reportDate',v)} type="date"/>
+            <MRadio label="Gestor Responsável" value={f.manager} onChange={v=>set('manager',v)} options={RESPONSAVEIS.mane.map(g=>({label:g,val:g}))}/>
+            <MRadio label="Turno" value={f.shift} onChange={v=>set('shift',v)} options={TURNOS_MANE.map(t=>({label:t,val:t}))}/>
+          </div>}
+          {step===2&&<div>
+            <MBool label="Ocorreram erros de prato no turno?" value={f.hadFoodErrors} onChange={v=>set('hadFoodErrors',v)}/>
+            {f.hadFoodErrors&&<div className="mt-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <label className="block text-sm font-medium text-slate-700 mb-2">Quais erros?</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                {ERROS_PRATO.map(e=>(
+                  <label key={e} className="flex items-center p-3 bg-white border rounded-lg cursor-pointer">
+                    <input type="checkbox" className="w-5 h-5 text-amber-500 rounded" checked={f.foodErrors.includes(e)} onChange={()=>toggleCheck('foodErrors',e)}/>
+                    <span className="ml-3 text-sm">{e}</span>
+                  </label>
+                ))}
+              </div>
+              {f.foodErrors.includes('Outro')&&<MInput label="Descrição do outro erro" value={f.otherFoodError} onChange={v=>set('otherFoodError',v)}/>}
+              <MInput label="Soluções tomadas" value={f.foodErrorSolutions} onChange={v=>set('foodErrorSolutions',v)} type="textarea" placeholder="Como os erros foram resolvidos?"/>
+            </div>}
+          </div>}
+          {step===3&&<div>
+            <div className="grid grid-cols-2 gap-4">
+              <MInput label="TMA do turno (min)" value={f.tmaAverage} onChange={v=>set('tmaAverage',v)} type="number"/>
+              <MInput label="% Acima de 15min" value={f.tmaAbove15} onChange={v=>set('tmaAbove15',v)} type="number"/>
+            </div>
+            {(Number(f.tmaAverage)>15||Number(f.tmaAbove15)>15)&&<div>
+              <MInput label="Gargalo identificado" value={f.tmaBottleneck} onChange={v=>set('tmaBottleneck',v)} type="textarea" placeholder="Ex: Saída da praça acumulou no pico."/>
+              <PerfBlock prefix="perf"/>
+            </div>}
+          </div>}
+          {step===4&&<div>
+            <MInput label="Nº de cancelamentos" value={f.cancelationsCount} onChange={v=>set('cancelationsCount',v)} type="number"/>
+            {Number(f.cancelationsCount)>0&&<MInput label="Motivos dos cancelamentos" value={f.cancelationsReasons} onChange={v=>set('cancelationsReasons',v)} type="textarea" placeholder="Ex: Cliente desistiu..."/>}
+            <div className="mt-4 border-t pt-4">
+              <MBool label="Tivemos rupturas durante a operação?" value={f.hadStockOuts} onChange={v=>set('hadStockOuts',v)}/>
+              {f.hadStockOuts&&<div className="mt-3 p-4 bg-slate-50 rounded-lg border">
+                <p className="text-sm font-semibold mb-3">Itens em Ruptura</p>
+                {f.stockOutList.map((s,i)=><ListRow key={i} item={s} onItemChange={(k,v)=>listChange('stockOutList',i,k,v)} onRemove={()=>listRemove('stockOutList',i)} showRemove={f.stockOutList.length>1}/>)}
+                <button onClick={()=>listAdd('stockOutList')} className="text-amber-600 text-sm font-semibold flex items-center mb-2"><MI.PlusCircle size={16} className="mr-1"/> Adicionar</button>
+                <PerfBlock prefix="stockOutPerf"/>
+              </div>}
+            </div>
+          </div>}
+          {step===5&&<div>
+            <MBool label="Tivemos relatos ou reclamações de clientes?" value={f.hadCustomerComplaints} onChange={v=>set('hadCustomerComplaints',v)}/>
+            {f.hadCustomerComplaints&&<div className="mt-3 p-4 bg-slate-50 rounded-lg border"><MInput label="Quais reclamações?" value={f.customerComplaints} onChange={v=>set('customerComplaints',v)} type="textarea" placeholder="Descreva..."/></div>}
+            <div className="mt-4 border-t pt-4">
+              <MInput label="Relato geral dos chefes de fila" value={f.waiterReports} onChange={v=>set('waiterReports',v)} type="textarea" placeholder="Feedback da operação de salão..."/>
+            </div>
+          </div>}
+          {step===6&&<div>
+            <MBool label="Foi realizada a conferência das planilhas de controle de desperdício?" value={f.wasteChecked} onChange={v=>set('wasteChecked',v)}/>
+            <div className="mt-4 border-t pt-4">
+              <MBool label="Houve desperdício a ser registrado?" value={f.hadWaste} onChange={v=>set('hadWaste',v)}/>
+              {f.hadWaste&&<div className="mt-3 p-4 bg-slate-50 rounded-lg border">
+                <p className="text-sm font-semibold mb-3">Itens Desperdiçados</p>
+                {f.wasteList.map((w,i)=><ListRow key={i} item={w} onItemChange={(k,v)=>listChange('wasteList',i,k,v)} onRemove={()=>listRemove('wasteList',i)} showRemove={f.wasteList.length>1}/>)}
+                <button onClick={()=>listAdd('wasteList')} className="text-amber-600 text-sm font-semibold flex items-center mb-2"><MI.PlusCircle size={16} className="mr-1"/> Adicionar</button>
+              </div>}
+              <div className="mt-4"><MInput label="Anotações / Justificativas" value={f.wasteNotes} onChange={v=>set('wasteNotes',v)} type="textarea" placeholder="Observações gerais..."/></div>
+            </div>
+          </div>}
+          {step===7&&<div className="space-y-4">
+            <MBool label="Os checklists de abertura foram preenchidos?" value={f.checklistsDone} onChange={v=>set('checklistsDone',v)}/>
+            <MBool label="Os quadros operacionais foram preenchidos?" value={f.boardsDone} onChange={v=>set('boardsDone',v)}/>
+            <MBool label="As reuniões de Pré-shift foram realizadas?" value={f.preShiftDone} onChange={v=>set('preShiftDone',v)}/>
+            {f.preShiftDone&&<div className="p-4 bg-slate-50 rounded-lg border"><MInput label="Ata da reunião de pré-shift" value={f.preShiftNotes} onChange={v=>set('preShiftNotes',v)} type="textarea" placeholder="Principais pontos abordados..."/></div>}
+            {(f.checklistsDone===false||f.boardsDone===false||f.preShiftDone===false)&&<div className="border-t pt-4"><MInput label="Por que não foi realizado?" value={f.maturityReason} onChange={v=>set('maturityReason',v)} type="textarea" placeholder="Justifique..."/></div>}
+          </div>}
+          {step===8&&<div>
+            <MBool label="Tivemos problema de sistema?" value={f.sysIssues} onChange={v=>set('sysIssues',v)}/>
+            {f.sysIssues&&<div className="mb-4 p-4 bg-slate-50 rounded-lg border"><MInput label="Qual foi o problema?" value={f.sysIssueDesc} onChange={v=>set('sysIssueDesc',v)} type="textarea"/><MInput label="Prazo de solução" value={f.sysSolutionDeadline} onChange={v=>set('sysSolutionDeadline',v)} type="date"/></div>}
+            <div className="border-t pt-4">
+              <MBool label="Temos algum equipamento quebrado?" value={f.equipIssues} onChange={v=>set('equipIssues',v)}/>
+              {f.equipIssues&&<div className="mt-2 p-4 bg-slate-50 rounded-lg border"><MInput label="Qual equipamento?" value={f.equipIssueDesc} onChange={v=>set('equipIssueDesc',v)} type="textarea"/><MInput label="Prazo de solução" value={f.equipSolutionDeadline} onChange={v=>set('equipSolutionDeadline',v)} type="date"/></div>}
+            </div>
+          </div>}
+          {step===9&&<div>
+            <MBool label="Houve desvio 1:1?" value={f.hadDeviations} onChange={v=>set('hadDeviations',v)}/>
+            {f.hadDeviations&&<div className="mt-3 p-4 bg-slate-50 rounded-lg border">
+              <p className="text-sm font-semibold mb-3">Itens com Desvio</p>
+              {f.deviationsList.map((d,i)=><ListRow key={i} item={d} onItemChange={(k,v)=>listChange('deviationsList',i,k,v)} onRemove={()=>listRemove('deviationsList',i)} showRemove={f.deviationsList.length>1}/>)}
+              <button onClick={()=>listAdd('deviationsList')} className="text-amber-600 text-sm font-semibold flex items-center mb-4"><MI.PlusCircle size={16} className="mr-1"/> Adicionar</button>
+              <div className="border-t pt-4">
+                <MInput label="Justificativa do desvio" value={f.deviationJustification} onChange={v=>set('deviationJustification',v)} type="textarea"/>
+                <MInput label="Ação corretiva" value={f.deviationAction} onChange={v=>set('deviationAction',v)} type="textarea"/>
+              </div>
+            </div>}
+          </div>}
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3 flex gap-3 max-w-2xl mx-auto">
+        <button onClick={()=>setStep(s=>s-1)} disabled={step===1} className={`flex items-center px-4 py-2 rounded-lg font-medium transition ${step===1?'opacity-0 cursor-default':'text-slate-600 hover:bg-slate-100'}`}><MI.ChevronLeft size={20}/> Voltar</button>
+        {step<9
+          ?<button onClick={()=>{if(!maneValid(step,f)){setTst('Preencha todos os campos obrigatórios');return;}setStep(s=>s+1);window.scrollTo(0,0);}} disabled={!maneValid(step,f)} className={`flex items-center ml-auto px-6 py-2 rounded-lg font-medium transition disabled:opacity-50 ${maneValid(step,f)?'bg-amber-500 text-white':'bg-slate-200 text-slate-400'}`}>Avançar <MI.ChevronRight size={20}/></button>
+          :<button onClick={submit} disabled={!maneValid(step,f)||busy} className={`ml-auto flex items-center px-6 py-2 rounded-lg font-medium transition disabled:opacity-50 ${maneValid(step,f)&&!busy?'bg-green-500 text-white':'bg-slate-200 text-slate-400'}`}>{busy?'Salvando...':'Finalizar'} <MI.CheckCircle2 size={20} className="ml-2"/></button>
+        }
+      </div>
+
+      {/* Summary modal */}
+      {summary&&(
+        <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="bg-green-500 p-6 text-center">
+              <MI.CheckCircle2 size={48} className="mx-auto text-white mb-2"/>
+              <h3 className="text-xl font-bold text-white">Relatório Salvo!</h3>
+            </div>
+            <div className="p-6">
+              <p className="text-sm font-semibold text-slate-700 mb-3">Resumo para WhatsApp:</p>
+              <div className="bg-slate-50 p-4 rounded-lg border mb-6 max-h-60 overflow-y-auto text-sm whitespace-pre-wrap font-mono text-slate-600">{genSummary()}</div>
+              <button onClick={copy} className={`w-full flex items-center justify-center py-3 rounded-xl font-bold transition-all ${maneCopied?'bg-green-400 text-white':'bg-green-600 text-white'}`}>
+                <MI.Copy size={20} className="mr-2"/> {maneCopied?'✓ Copiado! Fechando...':'Copiar para WhatsApp'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DASHBOARD (unificado)
+// ══════════════════════════════════════════════════════════════════════════════
+// ── Success screen ───────────────────────────────────────────────────────────
+const SuccessScreen = ({unit, report, onNew, onSwitch}) => {
+  const [copied, setCopied] = React.useState(false);
+  const text = report ? stdWAText(report) : null;
+  const handleCopy = () => {
+    if(!text) return;
+    copyText(text).then(ok => {
+      if(ok){ setCopied(true); setTimeout(()=>setCopied(false), 3000); }
+      else { alert('Não foi possível copiar automaticamente.\nSelecione o texto manualmente.'); }
+    });
+  };
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-6 text-center">
+      <div className="text-5xl mb-4">✅</div>
+      <h2 className="text-xl font-bold text-slate-800">Relatório enviado!</h2>
+      <p className="text-sm text-slate-500 mt-1 mb-6">{unit?.label}</p>
+      <div className="w-full max-w-xs flex flex-col gap-3">
+        {text && (
+          <button onClick={handleCopy}
+            className={`w-full py-3 rounded-xl font-semibold text-base transition-all flex items-center justify-center gap-2 shadow-sm
+              ${copied ? 'bg-green-500 text-white' : 'bg-[#25D366] text-white'}`}>
+            {copied ? '✓ Copiado!' : <>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
+              Copiar para WhatsApp
+            </>}
+          </button>
+        )}
+        <button onClick={onNew} className="w-full bg-orange-500 text-white py-3 rounded-xl font-semibold">Novo relatório</button>
+        <button onClick={onSwitch} className="w-full bg-white text-slate-600 border border-slate-200 py-3 rounded-xl font-semibold">Trocar unidade</button>
+      </div>
+    </div>
+  );
+};
+
+// ── WhatsApp summary for standard units ──────────────────────────────────────
+const stdWAText = (r) => {
+  const yn = v => v===true?'Sim':v===false?'Não':'—';
+  const unit = UNITS.find(u=>u.id===r.unit)?.label||r.unit||'';
+  const lines = [];
+  lines.push(`RELATÓRIO PÓS-TURNO — ${unit.toUpperCase()}`);
+  lines.push(`📅 ${r.date||''} | ${r.shift||''} | ${r.responsible||''}`);
+  lines.push(`Movimento: ${r.movimento||'—'}`);
+  lines.push('');
+  lines.push('⏱️ TMA e Cozinha');
+  lines.push(`TMA: ${r.tma||'—'} min | % acima 20min: ${r.pctAcima20||'—'}%`);
+  if(Number(r.pctAcima20)>20||r.temAtraso===true){
+    lines.push(`Atraso: ${r.atrasoDesc||'—'}`);
+    lines.push(`Processo que falhou: ${r.atrasoProcesso||'—'}`);
+    lines.push(`Responsável: ${r.atrasoResponsavel||'—'}`);
+    lines.push(`Justificativa: ${r.atrasoJustificativa||'—'}`);
+    lines.push(`Plano de ação: ${r.atrasoPlano||'—'}`);
+  } else {
+    lines.push(`Atraso relevante: ${yn(r.temAtraso)}`);
+  }
+  lines.push(`Reclamação de demora: ${yn(r.temReclamacaoDemora)}`);
+  if(r.temReclamacaoDemora){ lines.push(`Desc. demora: ${r.demoraDesc||'—'} | Ação: ${r.demoraFeito||'—'}`); }
+  lines.push(`Erro de qualidade: ${yn(r.temErroQualidade)}`);
+  if(r.temErroQualidade){
+    lines.push(`Desc. erro: ${r.erroQualidadeDesc||'—'}`);
+    lines.push(`Ação: ${r.erroFeito||'—'}`);
+    lines.push(`Compensação: ${yn(r.erroCompensacao)}${r.erroCompensacaoDesc?' — '+r.erroCompensacaoDesc:''}`);
+  }
+  lines.push('');
+  lines.push('🍽️ Salão e Experiência');
+  lines.push(`Visitas de mesa: ${r.visitaMesaQtd||'—'}`);
+  lines.push(`Reclamação atendimento: ${yn(r.temReclamacaoAtendimento)}`);
+  if(r.temReclamacaoAtendimento){ lines.push(`${r.reclamacaoAtendimentoDesc||'—'} | Solução: ${r.solucaoAtendimento||'—'}`); }
+  lines.push(`Reclamação ruptura: ${yn(r.temReclamacaoRuptura)}`);
+  if(r.temReclamacaoRuptura){ lines.push(`${r.rupturaSalaoDesc||'—'} | Solução: ${r.solucaoRuptura||'—'}`); }
+  lines.push(`Dificuldade explicação: ${yn(r.temDificuldadeExplicacao)}`);
+  if(r.temDificuldadeExplicacao){ lines.push(r.dificuldadeDesc||'—'); }
+  lines.push('');
+  lines.push('🛵 Delivery / iFood');
+  lines.push(`Atraso: ${yn(r.deliveryAtraso)} | Erro despacho: ${yn(r.deliveryErroDespacho)}`);
+  lines.push(`Rec. qualidade: ${yn(r.deliveryReclamacaoQualidade)} | Produto em falta: ${yn(r.deliveryProdutoFalta)} | Cortesia: ${yn(r.deliveryCortesia)}`);
+  if(r.deliveryAtraso&&r.deliveryAtrasoDesc){ lines.push(`Desc. atraso: ${r.deliveryAtrasoDesc}`); }
+  if(r.deliveryCortesia&&r.deliveryCortesiaDesc){ lines.push(`Desc. cortesia: ${r.deliveryCortesiaDesc}`); }
+  lines.push('');
+  lines.push('⚙️ Operação');
+  lines.push(`Checklists ok: ${yn(r.checklistsOk)}${r.checklistsDesc?' — '+r.checklistsDesc:''}`);
+  if(!r.checklistsOk){ lines.push(`Responsável: ${r.checklistsResponsavel||'—'}`); lines.push(`Justificativa: ${r.checklistsJustificativa||'—'}`); lines.push(`Plano de ação: ${r.checklistsPlano||'—'}`); }
+  lines.push(`Falta/atraso colaborador: ${yn(r.faltaAtraso)}${r.faltaAtrasoDesc?' — '+r.faltaAtrasoDesc:''}`);
+  lines.push(`Problema sistema: ${yn(r.problemaSistema)}${r.sistemaDesc?' — '+r.sistemaDesc:''}`);
+  lines.push(`Equipamento quebrado: ${yn(r.equipamentoQuebrado)}`);
+  if(r.equipamentoQuebrado){ lines.push(`${r.equipamentoDesc||'—'} | Ação: ${r.equipamentoAcao||'—'} | Prazo: ${r.equipamentoPrazo||'—'}`); }
+  lines.push('');
+  lines.push('📋 Gestão do Turno');
+  lines.push(`Principal BO: ${r.principalBO||'—'}`);
+  lines.push(`Principal acerto: ${r.principalAcerto||'—'}`);
+  lines.push(`Atenção próximo turno: ${r.atencaoProximo||'—'}`);
+  lines.push(`Nota do turno: ${r.notaTurno||'—'}/10`);
+  return lines.join('\n');
+};
+
+// ── Report modal (visual + WhatsApp copy) ────────────────────────────────────
+const RRow = ({label,value,ok}) => (
+  <div className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+    <span className="text-xs text-slate-500 shrink-0">{label}</span>
+    <span className={`text-xs font-medium text-right ${ok===true?'text-green-600':ok===false?'text-red-500':'text-slate-700'}`}>{value}</span>
+  </div>
+);
+const RSection = ({icon,title,children}) => (
+  <div className="mb-4">
+    <div className="flex items-center gap-1.5 mb-2">
+      <span className="text-base">{icon}</span>
+      <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">{title}</span>
+    </div>
+    <div className="bg-slate-50 rounded-xl px-3 py-1">{children}</div>
+  </div>
+);
+const yn = v => v===true?'Sim':v===false?'Não':'—';
+
+const ReportModal = ({report:r, onClose}) => {
+  const [copied,setCopied] = React.useState(false);
+  const isStd = r._col==='std';
+  const text = isStd ? stdWAText(r) : (r._waText||'');
+  const copy = () => {
+    copyText(text).then(ok=>{
+      if(ok){ setCopied(true); setTimeout(()=>setCopied(false),2500); }
+      else { alert('Não foi possível copiar automaticamente.\n\nSelecione o texto manualmente e copie.'); }
+    });
+  };
+  const unit = UNITS.find(u=>u.id===r.unit);
+  const nota = r.notaTurno!==undefined&&r.notaTurno!==''?Number(r.notaTurno):null;
+  const notaColor = nota===null?'bg-slate-200 text-slate-500':nota>=7?'bg-green-500 text-white':nota>=5?'bg-amber-500 text-white':'bg-red-500 text-white';
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center" onClick={onClose}>
+      <div className="bg-white w-full max-w-lg rounded-t-2xl max-h-[90vh] flex flex-col" onClick={e=>e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-xl ${unit?.color||'bg-slate-400'} flex items-center justify-center text-white font-bold text-sm`}>{(unit?.label||'?')[0]}</div>
+            <div>
+              <div className="font-bold text-slate-800 text-sm">{unit?.label||r.unit}</div>
+              <div className="text-xs text-slate-500">{r.date||r.reportDate||''} · {r.shift||''}{(r.responsible||r.manager)?(' · '+(r.responsible||r.manager)):''}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {nota!==null&&<span className={`text-xs font-bold px-2 py-1 rounded-lg ${notaColor}`}>{nota}/10</span>}
+            <button onClick={onClose} className="text-slate-400 text-lg w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded-lg">✕</button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-5 py-4">
+          {isStd ? (<>
+            <RSection icon="⏱" title="TMA e Cozinha">
+              <RRow label="TMA do turno" value={(r.tma||'—')+'min'} />
+              <RRow label="% acima de 20min" value={(r.pctAcima20||'—')+'%'} ok={Number(r.pctAcima20)<=20} />
+              <RRow label="Atraso relevante" value={yn(r.temAtraso)} ok={!r.temAtraso} />
+              {(r.temAtraso||Number(r.pctAcima20)>20)&&r.atrasoDesc&&<RRow label="1. Descrição do atraso" value={r.atrasoDesc}/>}
+              {(r.temAtraso||Number(r.pctAcima20)>20)&&r.atrasoProcesso&&<RRow label="2. Processo que falhou" value={r.atrasoProcesso}/>}
+              {(r.temAtraso||Number(r.pctAcima20)>20)&&r.atrasoResponsavel&&<RRow label="3. Responsável" value={r.atrasoResponsavel}/>}
+              {(r.temAtraso||Number(r.pctAcima20)>20)&&r.atrasoJustificativa&&<RRow label="4. Justificativa" value={r.atrasoJustificativa}/>}
+              {(r.temAtraso||Number(r.pctAcima20)>20)&&r.atrasoPlano&&<RRow label="5. Plano de ação" value={r.atrasoPlano}/>}
+              <RRow label="Reclamação de demora" value={yn(r.temReclamacaoDemora)} ok={!r.temReclamacaoDemora}/>
+              {r.temReclamacaoDemora&&r.demoraDesc&&<RRow label="Desc. demora" value={r.demoraDesc}/>}
+              <RRow label="Erro de qualidade" value={yn(r.temErroQualidade)} ok={!r.temErroQualidade}/>
+              {r.temErroQualidade&&<><RRow label="Desc. erro" value={r.erroQualidadeDesc||'—'}/><RRow label="Ação" value={r.erroFeito||'—'}/><RRow label="Compensação" value={yn(r.erroCompensacao)}/>{r.erroCompensacaoDesc&&<RRow label="Desc. compensação" value={r.erroCompensacaoDesc}/>}</>}
+            </RSection>
+
+            <RSection icon="🍽" title="Salão e Experiência">
+              <RRow label="Visitas de mesa" value={r.visitaMesaQtd||'—'}/>
+              <RRow label="Reclamação atendimento" value={yn(r.temReclamacaoAtendimento)} ok={!r.temReclamacaoAtendimento}/>
+              {r.temReclamacaoAtendimento&&<><RRow label="Descrição" value={r.reclamacaoAtendimentoDesc||'—'}/><RRow label="Solução" value={r.solucaoAtendimento||'—'}/></>}
+              <RRow label="Reclamação ruptura" value={yn(r.temReclamacaoRuptura)} ok={!r.temReclamacaoRuptura}/>
+              {r.temReclamacaoRuptura&&<><RRow label="Descrição" value={r.rupturaSalaoDesc||'—'}/><RRow label="Solução" value={r.solucaoRuptura||'—'}/></>}
+              <RRow label="Dificuldade explicação" value={yn(r.temDificuldadeExplicacao)} ok={!r.temDificuldadeExplicacao}/>
+              {r.temDificuldadeExplicacao&&r.dificuldadeDesc&&<RRow label="Descrição" value={r.dificuldadeDesc}/>}
+            </RSection>
+
+            <RSection icon="🛵" title="Delivery / iFood">
+              <RRow label="Atraso" value={yn(r.deliveryAtraso)} ok={!r.deliveryAtraso}/>
+              {r.deliveryAtraso&&r.deliveryAtrasoDesc&&<RRow label="Desc. atraso" value={r.deliveryAtrasoDesc}/>}
+              <RRow label="Erro de despacho" value={yn(r.deliveryErroDespacho)} ok={!r.deliveryErroDespacho}/>
+              <RRow label="Rec. qualidade" value={yn(r.deliveryReclamacaoQualidade)} ok={!r.deliveryReclamacaoQualidade}/>
+              <RRow label="Produto em falta" value={yn(r.deliveryProdutoFalta)} ok={!r.deliveryProdutoFalta}/>
+              <RRow label="Necessidade cortesia" value={yn(r.deliveryCortesia)} ok={!r.deliveryCortesia}/>
+              {r.deliveryCortesia&&r.deliveryCortesiaDesc&&<RRow label="Desc. cortesia" value={r.deliveryCortesiaDesc}/>}
+            </RSection>
+
+            <RSection icon="⚙️" title="Operação">
+              <RRow label="Checklists ok" value={yn(r.checklistsOk)} ok={r.checklistsOk}/>
+              {!r.checklistsOk&&r.checklistsDesc&&<RRow label="O que faltou" value={r.checklistsDesc}/>}
+              {!r.checklistsOk&&r.checklistsResponsavel&&<RRow label="Responsável" value={r.checklistsResponsavel}/>}
+              {!r.checklistsOk&&r.checklistsJustificativa&&<RRow label="Justificativa" value={r.checklistsJustificativa}/>}
+              {!r.checklistsOk&&r.checklistsPlano&&<RRow label="Plano de ação" value={r.checklistsPlano}/>}
+              <RRow label="Falta/atraso colaborador" value={yn(r.faltaAtraso)} ok={!r.faltaAtraso}/>
+              {r.faltaAtraso&&r.faltaAtrasoDesc&&<RRow label="Descrição" value={r.faltaAtrasoDesc}/>}
+              <RRow label="Problema sistema" value={yn(r.problemaSistema)} ok={!r.problemaSistema}/>
+              {r.problemaSistema&&r.sistemaDesc&&<RRow label="Descrição" value={r.sistemaDesc}/>}
+              <RRow label="Equipamento quebrado" value={yn(r.equipamentoQuebrado)} ok={!r.equipamentoQuebrado}/>
+              {r.equipamentoQuebrado&&<><RRow label="Equipamento" value={r.equipamentoDesc||'—'}/><RRow label="Ação" value={r.equipamentoAcao||'—'}/><RRow label="Prazo" value={r.equipamentoPrazo||'—'}/></>}
+            </RSection>
+
+            <RSection icon="📋" title="Gestão do Turno">
+              <RRow label="Principal BO" value={r.principalBO||'—'}/>
+              <RRow label="Principal acerto" value={r.principalAcerto||'—'}/>
+              <RRow label="Atenção próximo turno" value={r.atencaoProximo||'—'}/>
+              <RRow label="Movimento" value={r.movimento||'—'}/>
+            </RSection>
+          </>) : (
+            <div className="text-sm text-slate-500 text-center py-8">Relatório Mané — dados salvos no Firebase.</div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-5 pt-3 border-t border-slate-100 shrink-0">
+          <button onClick={copy} className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${copied?'bg-green-500 text-white':'bg-orange-500 text-white'}`}>
+            {copied?'✓ Copiado!':'📋 Copiar texto para WhatsApp'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Dashboard = ({stdReports,maneReports}) => {
+  const RC = window.Recharts||{};
+  const {BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,LineChart,Line} = RC;
+  const [unitFilter,setUnitFilter] = React.useState('all');
+  const [periodFilter,setPeriodFilter] = React.useState('all');
+  const [selectedReport,setSelectedReport] = React.useState(null);
+  const [confirmDelete,setConfirmDelete] = React.useState(null);
+  const [deletePass,setDeletePass] = React.useState('');
+  const [deleteErr,setDeleteErr] = React.useState(false);
+
+  const deleteReport = async () => {
+    if(deletePass!=='grupo3v'){setDeleteErr(true);setTimeout(()=>setDeleteErr(false),2000);return;}
+    const col = confirmDelete._col==='mane' ? COL_MANE : COL_UNIDADES;
+    await db.collection(col).doc(confirmDelete.id).delete();
+    setConfirmDelete(null);
+    setDeletePass('');
+  };
+
+  const allReports = React.useMemo(()=>[
+    ...stdReports.map(r=>({...r,_col:'std'})),
+    ...maneReports.map(r=>({...r,unit:'mane',_col:'mane'})),
+  ].sort((a,b)=>b.timestamp-a.timestamp),[stdReports,maneReports]);
+
+  const now = Date.now();
+  const periodMs = {today:86400000,week:7*86400000,month:30*86400000,all:Infinity};
+
+  const filtered = allReports.filter(r=>{
+    const unitOk = unitFilter==='all'||r.unit===unitFilter;
+    const periodOk = periodFilter==='all'||(now-(r.timestamp||0))<=periodMs[periodFilter];
+    return unitOk&&periodOk;
+  });
+
+  const withNota = filtered.filter(r=>r.notaTurno!==undefined&&r.notaTurno!=='');
+  const avgNota = withNota.length ? (withNota.reduce((s,r)=>s+Number(r.notaTurno||0),0)/withNota.length).toFixed(1) : '—';
+  const withTma = filtered.filter(r=>r.tma!==undefined&&r.tma!=='');
+  const avgTma = withTma.length ? Math.round(withTma.reduce((s,r)=>s+Number(r.tma||0),0)/withTma.length) : '—';
+  const ocorrencias = filtered.filter(r=>r.temErroQualidade||r.temAtraso||r.temReclamacaoDemora||r.temReclamacaoAtendimento||r.deliveryAtraso).length;
+
+  const byUnit = UNITS.map(u=>({
+    name: u.label.replace(' Norte','N.').replace(' Sul','S.').replace('Águas Claras','Ág.Cl.').replace('Superquadra','Superq.'),
+    relatórios: allReports.filter(r=>r.unit===u.id).length,
+    nota: (()=>{const rs=allReports.filter(r=>r.unit===u.id&&r.notaTurno!=='');return rs.length?(rs.reduce((s,r)=>s+Number(r.notaTurno||0),0)/rs.length).toFixed(1):0;})(),
+  }));
+
+  const kpis = [
+    {label:'Relatórios',value:filtered.length,color:'text-orange-500'},
+    {label:'Nota média',value:avgNota,color:'text-blue-500'},
+    {label:'TMA médio',value:avgTma==='—'?'—':avgTma+'min',color:'text-green-500'},
+    {label:'Ocorrências',value:ocorrencias,color:'text-red-500'},
+  ];
+
+  const PERIOD_LABELS = {today:'Hoje',week:'7 dias',month:'30 dias',all:'Tudo'};
+
+  return(
+    <div className="px-4 pb-24 pt-4 max-w-2xl mx-auto">
+      {selectedReport&&<ReportModal report={selectedReport} onClose={()=>setSelectedReport(null)}/>}
+      {confirmDelete&&(
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-6" onClick={()=>{setConfirmDelete(null);setDeletePass('');setDeleteErr(false);}}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm" onClick={e=>e.stopPropagation()}>
+            <h3 className="font-bold text-slate-800 mb-1">Excluir relatório?</h3>
+            <p className="text-sm text-slate-500 mb-4">
+              {UNITS.find(u=>u.id===confirmDelete.unit)?.label||confirmDelete.unit} · {confirmDelete.date||confirmDelete.reportDate||''} · {confirmDelete.shift||''}<br/>Esta ação não pode ser desfeita.
+            </p>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Senha para excluir</label>
+            <input
+              type="password"
+              value={deletePass}
+              onChange={e=>setDeletePass(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&deleteReport()}
+              placeholder="Digite a senha"
+              className={`w-full border rounded-xl px-3 py-2.5 text-sm mb-1 focus:outline-none focus:ring-2 ${deleteErr?'border-red-400 ring-red-200':'border-slate-200 focus:ring-orange-300'}`}
+            />
+            {deleteErr&&<p className="text-xs text-red-500 mb-3">Senha incorreta.</p>}
+            {!deleteErr&&<div className="mb-3"/>}
+            <div className="flex gap-3">
+              <button onClick={()=>{setConfirmDelete(null);setDeletePass('');setDeleteErr(false);}} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm">Cancelar</button>
+              <button onClick={deleteReport} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-semibold text-sm">Excluir</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <h2 className="text-lg font-bold text-slate-800 mb-4">📊 Dashboard Operacional</h2>
+
+      {/* Period filter */}
+      <div className="flex gap-2 mb-3">
+        {Object.entries(PERIOD_LABELS).map(([k,l])=>(
+          <button key={k} onClick={()=>setPeriodFilter(k)} className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${periodFilter===k?'bg-slate-800 text-white border-slate-800':'bg-white border-slate-200 text-slate-600'}`}>{l}</button>
+        ))}
+      </div>
+
+      {/* Unit filter */}
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
+        <button onClick={()=>setUnitFilter('all')} className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium border ${unitFilter==='all'?'bg-orange-500 text-white border-orange-500':'bg-white border-slate-200 text-slate-600'}`}>Todas</button>
+        {UNITS.map(u=>(
+          <button key={u.id} onClick={()=>setUnitFilter(u.id)} className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium border ${unitFilter===u.id?'bg-orange-500 text-white border-orange-500':'bg-white border-slate-200 text-slate-600'}`}>{u.label}</button>
+        ))}
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-4 gap-2 mb-5">
+        {kpis.map(k=>(
+          <div key={k.label} className="bg-white rounded-xl border border-slate-200 p-3 text-center shadow-sm">
+            <div className={`text-xl font-bold ${k.color}`}>{k.value}</div>
+            <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Ocorrencias breakdown */}
+      {filtered.length>0&&(
+        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 shadow-sm">
+          <p className="text-xs font-bold text-slate-500 uppercase mb-3">Ocorrências no período</p>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              {label:'Erro de qualidade',count:filtered.filter(r=>r.temErroQualidade).length},
+              {label:'Atraso relevante',count:filtered.filter(r=>r.temAtraso||Number(r.pctAcima20)>20).length},
+              {label:'Reclamação cliente',count:filtered.filter(r=>r.temReclamacaoDemora||r.temReclamacaoAtendimento).length},
+              {label:'Atraso delivery',count:filtered.filter(r=>r.deliveryAtraso).length},
+              {label:'Falta colaborador',count:filtered.filter(r=>r.faltaAtraso).length},
+              {label:'Equip. quebrado',count:filtered.filter(r=>r.equipamentoQuebrado).length},
+            ].map(o=>(
+              <div key={o.label} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                <span className="text-xs text-slate-600">{o.label}</span>
+                <span className={`text-sm font-bold ${o.count>0?'text-red-500':'text-green-500'}`}>{o.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Chart */}
+      {BarChart&&byUnit.some(u=>u.relatórios>0)&&(
+        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 shadow-sm">
+          <p className="text-xs font-bold text-slate-500 uppercase mb-3">Relatórios por unidade</p>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={byUnit} margin={{top:0,right:0,left:-20,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+              <XAxis dataKey="name" tick={{fontSize:9}}/>
+              <YAxis tick={{fontSize:10}}/>
+              <Tooltip/>
+              <Bar dataKey="relatórios" fill="#f97316" radius={[4,4,0,0]}/>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Report list */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <p className="text-xs font-bold text-slate-500 uppercase px-4 py-3 border-b border-slate-100">Relatórios recentes</p>
+        {filtered.length===0
+          ? <p className="text-sm text-slate-400 text-center py-10">Nenhum relatório encontrado.</p>
+          : filtered.slice(0,30).map(r=>{
+            const unit = UNITS.find(u=>u.id===r.unit);
+            const dt = r.date||r.reportDate||'';
+            const shift = r.shift||'';
+            const resp = r.responsible||r.manager||'';
+            const nota = r.notaTurno!==undefined&&r.notaTurno!==''?Number(r.notaTurno):null;
+            const hasOcorr = r.temErroQualidade||r.temAtraso||r.temReclamacaoDemora||r.temReclamacaoAtendimento||r.deliveryAtraso;
+            return(
+              <div key={r.id} className="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
+                <div className={`w-8 h-8 rounded-lg ${unit?.color||'bg-slate-400'} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                  {(unit?.label||'?')[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-slate-800">{unit?.label||r.unit}</div>
+                  <div className="text-xs text-slate-500 truncate">{dt} · {shift}{resp?' · '+resp:''}</div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {hasOcorr&&<span className="w-2 h-2 rounded-full bg-red-400"/>}
+                  {nota!==null&&<span className={`text-xs font-bold ${nota>=7?'text-green-500':nota>=5?'text-amber-500':'text-red-500'}`}>{nota}/10</span>}
+                  <button onClick={()=>setSelectedReport(r)} className="text-xs bg-orange-50 text-orange-600 border border-orange-200 rounded-lg px-2 py-1 font-medium hover:bg-orange-100 transition-colors">Ver</button>
+                  <button onClick={()=>setConfirmDelete(r)} className="text-xs bg-red-50 text-red-500 border border-red-200 rounded-lg px-2 py-1 font-medium hover:bg-red-100 transition-colors">🗑</button>
+                </div>
+              </div>
+            );
+          })
+        }
+      </div>
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MAIN APP
+// ══════════════════════════════════════════════════════════════════════════════
+function App(){
+  const [stdReports,  setStdReports]  = React.useState([]);
+  const [maneReports, setManeReports] = React.useState([]);
+  const [loading,     setLoading]     = React.useState(true);
+  const [selUnit,     setSelUnit]     = React.useState(null);
+  const [activeTab,   setActiveTab]   = React.useState('form');
+  const [done,        setDone]        = React.useState(false);
+  const [lastReport,  setLastReport]  = React.useState(null);
+  const [showWA,      setShowWA]      = React.useState(false);
+
+  React.useEffect(()=>{
+    const u1=db.collection(COL_UNIDADES).onSnapshot(snap=>{
+      const d=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.timestamp-a.timestamp);
+      setStdReports(d); setLoading(false);
+    },err=>{console.error(err);setLoading(false);});
+    const u2=db.collection(COL_MANE).onSnapshot(snap=>{
+      const d=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.timestamp-a.timestamp);
+      setManeReports(d);
+    },err=>console.error(err));
+    return()=>{u1();u2();};
+  },[]);
+
+  const handleSubmitStd = async (data) => {
+    await db.collection(COL_UNIDADES).add({...data,timestamp:Date.now()});
+    setLastReport({...data,_col:'std'});
+    setDone(true);
+  };
+  const handleSubmitMane = async (data) => {
+    if(!data)return;
+    await db.collection(COL_MANE).add({...data,date:data.reportDate,timestamp:Date.now()});
+  };
+
+  if(loading) return(
+    <div className="min-h-screen flex items-center justify-center"><div className="spin w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full"/></div>
+  );
+
+  // Unit selector
+  if(!selUnit) return(
+    <div className="min-h-screen bg-slate-50 px-4 pt-12 pb-8">
+      <div className="max-w-sm mx-auto">
+        <div className="text-center mb-6">
+          <div className="text-3xl mb-2">🍕</div>
+          <h1 className="text-2xl font-bold text-slate-800">Relatório Operacional</h1>
+          <p className="text-sm text-slate-500 mt-1">Selecione a unidade para iniciar</p>
+        </div>
+        <button onClick={()=>{setSelUnit({id:'__dashboard',label:'Dashboard'});}}
+          className="w-full flex items-center justify-center gap-3 bg-orange-500 text-white rounded-2xl p-4 mb-6 shadow-md hover:bg-orange-600 transition-all">
+          <span className="text-xl">📊</span>
+          <span className="font-bold text-base">Dashboard Geral</span>
+        </button>
+        <div className="space-y-3">
+          {UNITS.map(u=>(
+            <button key={u.id} onClick={()=>{setSelUnit(u);setDone(false);setActiveTab('form');}}
+              className="w-full flex items-center gap-4 bg-white border border-slate-200 rounded-2xl p-4 hover:border-orange-300 hover:shadow-md transition-all text-left">
+              <div className={`w-12 h-12 rounded-xl ${u.color} flex items-center justify-center text-white font-bold text-lg`}>{u.label[0]}</div>
+              <span className="font-semibold text-slate-800">{u.label}</span>
+              <span className="ml-auto text-slate-300 text-lg">›</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Dashboard standalone
+  if(selUnit.id==='__dashboard') return(
+    <div className="min-h-screen bg-slate-50">
+      <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+        <button onClick={()=>setSelUnit(null)} className="text-slate-400 hover:text-slate-700 text-lg font-bold pr-2">‹</button>
+        <span className="font-semibold text-slate-800 text-sm">Dashboard Geral</span>
+      </div>
+      <Dashboard stdReports={stdReports} maneReports={maneReports}/>
+    </div>
+  );
+
+  // Success
+  if(done) return(
+    <SuccessScreen unit={selUnit} report={lastReport}
+      onNew={()=>{setDone(false);setLastReport(null);}}
+      onSwitch={()=>{setSelUnit(null);setDone(false);setLastReport(null);}}
+    />
+  );
+
+  // Mané form
+  if(selUnit.mane) return(
+    <ManeForm
+      onBack={()=>setSelUnit(null)}
+      onSubmit={async(data)=>{
+        if(!data){setSelUnit(null);return;}
+        await handleSubmitMane(data);
+        setDone(true);
+      }}
+    />
+  );
+
+  // Standard form with history + dashboard tabs
+  if(activeTab==='form') return(
+    <StdForm
+      unitLabel={selUnit.label}
+      unitId={selUnit.id}
+      onBack={()=>setSelUnit(null)}
+      onSubmit={handleSubmitStd}
+    />
+  );
+
+  // History tab for standard units
+  const unitReports = stdReports.filter(r=>r.unit===selUnit.id);
+  return(
+    <div className="min-h-screen bg-slate-50">
+      <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+        <button onClick={()=>setSelUnit(null)} className="text-slate-400 hover:text-slate-700 text-lg font-bold pr-2">‹</button>
+        <div className={`w-7 h-7 rounded-lg ${selUnit.color} flex items-center justify-center text-white text-xs font-bold`}>{selUnit.label[0]}</div>
+        <span className="font-semibold text-slate-800 text-sm">{selUnit.label}</span>
+      </div>
+      <div className="flex bg-white border-b border-slate-200">
+        {[['form','📋 Formulário'],['history','🕒 Histórico'],['dashboard','📊 Dashboard']].map(([id,label])=>(
+          <button key={id} onClick={()=>setActiveTab(id)} className={`flex-1 py-2.5 text-xs font-medium transition-all ${activeTab===id?'text-orange-500 border-b-2 border-orange-500':'text-slate-500'}`}>{label}</button>
+        ))}
+      </div>
+      {activeTab==='history'&&(
+        <div className="px-4 pt-4 pb-8 space-y-3">
+          {unitReports.length===0
+            ?<p className="text-sm text-slate-400 text-center mt-10">Nenhum relatório ainda.</p>
+            :unitReports.map(r=>{
+              const unit=UNITS.find(u=>u.id===r.unit);
+              const alerts=[r.temErroQualidade,r.temReclamacaoAtendimento,r.deliveryAtraso,r.equipamentoQuebrado,r.problemaSistema].filter(Boolean).length;
+              return(
+                <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                  <div className="flex justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-700">{fmtDate(r.date)} · {r.shift}</div>
+                      <div className="text-xs text-slate-500">{r.responsible}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-orange-500">{r.notaTurno}</div>
+                      <div className="text-xs text-slate-400">/10</div>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex gap-3 text-xs text-slate-500">
+                    <span>⏱ TMA: {r.tma} min</span>
+                    <span>📦 {r.movimento}</span>
+                    {alerts>0&&<span className="text-red-500">⚠️ {alerts} alerta{alerts>1?'s':''}</span>}
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      )}
+      {activeTab==='dashboard'&&<Dashboard stdReports={stdReports} maneReports={maneReports}/>}
+    </div>
+  );
+}
+
+const splash = document.getElementById('app-splash');
+if(splash) splash.remove();
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
